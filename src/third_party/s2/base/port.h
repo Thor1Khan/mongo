@@ -680,15 +680,22 @@ extern inline void prefetch(const char *x) {}
 
 #endif  // !HAVE_ATTRIBUTE_SECTION
 
-#if defined _WIN32 || defined __sunos__
-inline double drem(double x, double y) {
-  int quot = (x / y) + 0.5;
-  return x - ((double)quot) * y;
-}
+#if defined __sunos__
+#define drem remainder
 #endif
 
 // HK's fun windows fixer-upper defines go here!  Woo.
 #ifdef _WIN32
+inline double drem(double x, double y) {
+    double quot = x/y;
+    if (quot > 0) {
+        quot = quot + 0.5;
+    } else {
+        quot = quot - 0.5;
+    }
+    int iquot = quot;
+    return x - iquot * y;
+}
 #define strtoll  _strtoi64
 #define strtoull _strtoui64
 #define safe_vsnprintf _vsnprintf

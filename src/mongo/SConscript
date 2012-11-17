@@ -375,8 +375,10 @@ serverOnlyFiles = [ "db/curop.cpp",
                     "db/commands/distinct.cpp",
                     "db/commands/find_and_modify.cpp",
                     "db/commands/group.cpp",
+                    "db/commands/index_stats.cpp",
                     "db/commands/mr.cpp",
                     "db/commands/pipeline_command.cpp",
+                    "db/commands/storage_details.cpp",
                     "db/pipeline/pipeline_d.cpp",
                     "db/pipeline/document_source_cursor.cpp",
                     "db/driverHelpers.cpp" ]
@@ -426,6 +428,30 @@ env.Library( "mongoscore" , mongosLibraryFiles )
 env.CppUnitTest( "balancer_policy_test" , [ "s/balancer_policy_tests.cpp" ] ,
                  LIBDEPS=["mongoscore", "coreshard","mongocommon","coreserver","coredb","dbcmdline","mongodandmongos"] ,
                  NO_CRUTCH=True)
+
+env.CppUnitTest("scoped_db_conn_test", [ "client/scoped_db_conn_test.cpp" ],
+                 LIBDEPS=[
+                    "coredb",
+                    "coreserver",
+                    "coreshard",
+                    "dbcmdline",
+                    "mongocommon",
+                    "mongodandmongos",
+                    "mongoscore"],
+                 NO_CRUTCH=True)
+
+env.CppUnitTest("shard_conn_test", [ "s/shard_conn_test.cpp" ],
+                 LIBDEPS=[
+                    "mongoscore",
+                    "coreshard",
+                    "mongocommon",
+                    "coreserver",
+                    "coredb",
+                    "dbcmdline",
+                    "mongodandmongos",
+                    "mocklib"],
+                 NO_CRUTCH=True)
+
 
 # Should only need stuff from util, unittest and platform
 env.CppUnitTest("fail_point_test", [ "util/fail_point_test.cpp" ],

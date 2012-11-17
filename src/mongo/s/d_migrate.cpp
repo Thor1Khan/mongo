@@ -307,7 +307,10 @@ namespace mongo {
         }
 
         void done() {
-            Lock::DBWrite lk( _ns );
+            log() << "MigrateFromStatus::done About to acquire global write lock to exit critical "
+                    "section" << endl;
+            Lock::GlobalWrite lk;
+            log() << "MigrateFromStatus::done Global lock acquired" << endl;
 
             {
                 scoped_spinlock lk( _trackerLocks );
@@ -1077,7 +1080,9 @@ namespace mongo {
             // 4.
             for ( int i=0; i<86400; i++ ) { // don't want a single chunk move to take more than a day
                 verify( !Lock::isLocked() );
-                sleepsecs( 1 );
+                // Exponential sleep backoff, up to 1 sec. Don't sleep much on the first few
+                // iterations, since we want empty chunk migrations to be fast.
+                i < 10 ? sleepmillis( 1 << i ) : sleepsecs( 1 );
                 scoped_ptr<ScopedDbConnection> conn(
                         ScopedDbConnection::getScopedDbConnection( toShard.getConnString() ) );
                 BSONObj res;
@@ -1152,7 +1157,7 @@ namespace mongo {
                     BSONObj res;
                     scoped_ptr<ScopedDbConnection> connTo(
                             ScopedDbConnection::getScopedDbConnection( toShard.getConnString(),
-                                                                       10.0 ) );
+                                                                       35.0 ) );
 
                     bool ok;
 
@@ -1170,15 +1175,18 @@ namespace mongo {
                     connTo->done();
 
                     if ( ! ok ) {
+                        log() << "moveChunk migrate commit not accepted by TO-shard: " << res
+                              << " resetting shard version to: " << startingVersion << migrateLog;
                         {
-                            Lock::DBWrite lk( ns );
+                            Lock::GlobalWrite lk;
+                            log() << "moveChunk global lock acquired to reset shard version from "
+                                    "failed migration" << endl;
 
                             // revert the chunk manager back to the state before "forgetting" about the chunk
                             shardingState.undoDonateChunk( ns , min , max , startingVersion );
                         }
-
-                        log() << "moveChunk migrate commit not accepted by TO-shard: " << res
-                              << " resetting shard version to: " << startingVersion << migrateLog;
+                        log() << "Shard version successfully reset to clean up failed migration"
+                                << endl;
 
                         errmsg = "_recvChunkCommit failed!";
                         result.append( "cause" , res );
@@ -1634,6 +1642,8 @@ namespace mongo {
                 // this will prevent us from going into critical section until we're ready
                 Timer t;
                 while ( t.minutes() < 600 ) {
+                    log() << "Waiting for replication to catch up before entering critical section"
+                          << endl;
                     if ( flushPendingWrites( lastOpApplied ) )
                         break;
                     sleepsecs(1);
@@ -1823,7 +1833,8 @@ namespace mongo {
             
             Timer t;
             // we wait for the commit to succeed before giving up
-            while ( t.minutes() <= 5 ) {
+            while ( t.seconds() <= 30 ) {
+                log() << "Waiting for commit to finish" << endl;
                 sleepmillis(1);
                 if ( state == DONE )
                     return true;

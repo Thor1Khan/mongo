@@ -101,7 +101,7 @@ namespace mongo {
             vector<shared_ptr<boost::thread> > l;
             for (int i = 0; i < 4; i++) {
                 l.push_back(
-                    shared_ptr<boost::thread> (new boost::thread(boost::bind(&runThread))));
+					shared_ptr<boost::thread> (new boost::thread(boost::bind(&runThread))));
             }
 
             int secs = 10;
