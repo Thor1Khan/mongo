@@ -957,14 +957,9 @@ namespace mongo {
             }
 
             if ( !initShards || !initShards->size() ) {
-                // use all shards, starting with primary
+                // If not specified, only use the primary shard (note that it's not safe for mongos
+                // to put initial chunks on other shards without the primary mongod knowing).
                 shards->push_back( primary );
-                vector<Shard> tmp;
-                primary.getAllShards( tmp );
-                for ( unsigned i = 0; i < tmp.size(); ++i ) {
-                    if ( tmp[i] != primary )
-                        shards->push_back( tmp[i] );
-                }
             }
         }
     }
@@ -1083,8 +1078,8 @@ namespace mongo {
         // TODO Determine if the third argument to OrRangeGenerator() is necessary, see SERVER-5165.
         OrRangeGenerator org(_ns.c_str(), query, false);
 
-        const string special = org.getSpecial();
-        if (special == "2d") {
+        const set<string> special = org.getSpecial();
+        if (special.end() != special.find("2d") || special.end() != special.find("s2d")) {
             BSONForEach(field, query) {
                 if (getGtLtOp(field) == BSONObj::opNEAR) {
                     uassert(13501, "use geoNear command rather than $near query", false);
@@ -1092,9 +1087,12 @@ namespace mongo {
                 }
                 // $within queries are fine
             }
-        }
-        else if (!special.empty()) {
-            uassert(13502, "unrecognized special query type: " + special, false);
+        } else if (!special.empty()) {
+            stringstream ss;
+            for (set<string>::const_iterator it = special.begin(); it != special.end(); ++it) {
+                ss << *it << ", ";
+            }
+            uassert(13502, "unrecognized special query type: " + ss.str(), false);
         }
 
         do {

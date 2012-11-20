@@ -16,14 +16,17 @@
 *    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#include "pch.h"
+#include "mongo/pch.h"
+
 #include "mongo/db/queryoptimizer.h"
-#include "db.h"
-#include "mongo/db/btreecursor.h"
-#include "cmdline.h"
-#include "../server.h"
-#include "pagefault.h"
+
 #include "mongo/client/dbclientinterface.h"
+#include "mongo/db/btreecursor.h"
+#include "mongo/db/cmdline.h"
+#include "mongo/db/db.h"
+#include "mongo/db/intervalbtreecursor.h"
+#include "mongo/db/pagefault.h"
+#include "mongo/server.h"
 
 //#define DEBUGQO(x) cout << x << endl;
 #define DEBUGQO(x)
@@ -258,7 +261,8 @@ doneCheckOrder:
         }
     }
 
-    shared_ptr<Cursor> QueryPlan::newCursor( const DiskLoc &startLoc ) const {
+    shared_ptr<Cursor> QueryPlan::newCursor( const DiskLoc& startLoc,
+                                             bool requestIntervalCursor ) const {
 
         if ( _type ) {
             // hopefully safe to use original query in these contexts - don't think we can mix type with $or clause separation yet
@@ -299,6 +303,27 @@ doneCheckOrder:
                                                           _frv->endKey(),
                                                           true,
                                                           _direction >= 0 ? 1 : -1 ) );
+        }
+
+        // An IntervalBtreeCursor is returned if explicitly requested AND _frv is exactly
+        // represented by a single interval within the btree.
+        if ( // If an interval cursor is requested and ...
+             requestIntervalCursor &&
+             // ... equalities come before ranges (a requirement of Optimal) and ...
+             _utility == Optimal &&
+             // ... the field range vector exactly represents a single interval ...
+             _frv->isSingleInterval() ) {
+            // ... and an interval cursor can be created ...
+            shared_ptr<Cursor> ret( IntervalBtreeCursor::make( _d,
+                                                               *_index,
+                                                               _frv->startKey(),
+                                                               _frv->startKeyInclusive(),
+                                                               _frv->endKey(),
+                                                               _frv->endKeyInclusive() ) );
+            if ( ret ) {
+                // ... then return the interval cursor.
+                return ret;
+            }
         }
 
         return shared_ptr<Cursor>( BtreeCursor::make( _d,
@@ -974,22 +999,26 @@ doneCheckOrder:
     
     bool QueryPlanGenerator::addSpecialPlan( NamespaceDetails *d ) {
         DEBUGQO( "\t special : " << _qps.frsp().getSpecial() );
-        if ( _qps.frsp().getSpecial().size() ) {
-            string special = _qps.frsp().getSpecial();
+        set<string> special = _qps.frsp().getSpecial();
+        if (!special.empty()) {
             NamespaceDetails::IndexIterator i = d->ii();
             while( i.more() ) {
                 int j = i.pos();
                 IndexDetails& ii = i.next();
                 const IndexSpec& spec = ii.getSpec();
-                if ( spec.getTypeName() == special &&
-                    spec.suitability( _qps.originalQuery(), _qps.order() ) ) {
+                if ((special.end() != special.find(spec.getTypeName())) && 
+                    spec.suitability( _qps.originalQuery(), _qps.order())) {
                     uassert( 16330, "'special' query operator not allowed", _allowSpecial );
-                    _qps.setSinglePlan( newPlan( d, j, BSONObj(), BSONObj(), special ) );
+                    _qps.setSinglePlan( newPlan( d, j, BSONObj(), BSONObj(), spec.getTypeName()));
                     return true;
                 }
             }
-            uassert( 13038, (string)"can't find special index: " + special +
-                    " for: " + _qps.originalQuery().toString(), false );
+            stringstream ss;
+            for (set<string>::const_iterator it = special.begin(); it != special.end(); ++it) {
+                ss << *it << ", ";
+            }
+            uassert(13038, "can't find any special indices: " + ss.str()
+                           + " for: " + _qps.originalQuery().toString(), false );
         }
         return false;
     }

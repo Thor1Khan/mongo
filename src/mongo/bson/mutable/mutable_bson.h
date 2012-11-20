@@ -15,19 +15,19 @@
 
 #pragma once
 
-#include "mongo/pch.h"
-
+#include <boost/scoped_ptr.hpp>
 #include <string>
-#include <stdint.h>
 
+#include "mongo/base/disallow_copying.h"
 #include "mongo/base/status.h"
 #include "mongo/db/jsobj.h"
+#include "mongo/platform/cstdint.h"
 #include "mongo/util/safe_num.h"
 
 namespace mongo {
 namespace mutablebson {
 
-    class Context;
+    class Document;
     class ElementVector;
     class FilterIterator;
     class Heap;
@@ -38,7 +38,7 @@ namespace mutablebson {
      * The Element class represents one node in the document tree. A document is
      * identified with its root node.
      *
-     * Elements are created with the help of the Context class. Once created, an
+     * Elements are created with the help of the Document class. Once created, an
      * element can be introduced in any position in a document tree with methods
      * provided here.
      *
@@ -46,27 +46,36 @@ namespace mutablebson {
      *
      *     // creation
      *     mutablebson::BasicHeap myHeap;
-     *     mutablebson::Context ctx(&myHeap);
-     *     mutablebson::Element e0 = ctx.makeObjElement("e0");
-     *     mutablebson::Element e1 = ctx.makeObjElement("e1");
+     *     mutablebson::Document doc(&myHeap);
+     *     // Document is: {}
+     *
+     *     mutablebson::Element e0 = doc.makeObjElement("e0");
+     *     doc.root().addChild(e0);
+     *     // Document is: { e0 : {} }
+     *
+     *     mutablebson::Element e1 = doc.makeObjElement("e1");
      *     e0.addChild(e1);
+     *     // Document is: { e0 : { e1 : {} } }
      *
      *     // traversal
-     *     mutablebson::SubtreeIterator it(&ctx, e0);
+     *     mutablebson::SubtreeIterator it(&doc, e0);
      *     while (!it.done()) {
-     *         cout << mutablebson::Element(&ctx, it.getRep()).fieldName()) << endl;
+     *         cout << mutablebson::Element(&doc, it.getRep()).fieldName()) << endl;
      *     }
      *
      *     // look up
      *     mutablebson::FilterIterator it = e0.find("e1");
      *     if (!it.done()) {
-     *         cout << mongo::mutablebson::Element(&ctx, it.getRep()).fieldName( ) << endl;
+     *         cout << mongo::mutablebson::Element(&doc, it.getRep()).fieldName( ) << endl;
      *     }
      */
     class Element {
     public:
-        Element(Context* ctx, uint32_t rep);
-        ~Element();
+        Element(Document* doc, uint32_t rep)
+            : _doc(doc)
+            , _rep(rep) {}
+
+        ~Element() {}
 
         //
         // navigation API
@@ -125,14 +134,14 @@ namespace mutablebson {
         OpTime getTSValue() const;
         int64_t getDateValue() const;
         double getDoubleValue() const;
-       
+        OID getOIDValue() const;
+
         /**
             The methods returning const char* all have the property that the returned value is
             only valid until the next non-const method is called on the underlying heap, because
             those operations might invalidate the iterators from which these values are implicitly
             derived. This happens in practice if the heap's underlying vector grows.  (andy)
         */
-        const char* getOIDValue() const;
         const char* getStringValue() const;
         const char* getRegexValue() const;
 
@@ -144,24 +153,10 @@ namespace mutablebson {
         void setTSValue(OpTime tsVal);
         void setDateValue(int64_t millis);
         void setDoubleValue(double doubleVal);
-        void setOIDValue(const StringData& oid);
+        void setOIDValue(const OID& oid);
         void setStringValue(const StringData& stringVal);
         void setRegexValue(const StringData& re);
         void setSafeNumValue(const SafeNum& safeNum);
-
-        //
-        // BSONElement compatibility
-        //
-
-        bool Bool() const;
-        int Int() const;
-        long long Long() const;
-        Date_t Date() const;
-        double Double() const;
-        double Number() const;
-        mongo::OID OID() const;
-        std::string String() const;
-        const void* BinData() const;
 
         // additional methods needed for BSON decoding
         Status prefix(std::string* result, char delim) const;
@@ -181,34 +176,33 @@ namespace mutablebson {
         bool isNonAtomic() const;
 
         //
-        // stream API - BSONObjBuilder compatibility
+        // stream API - BSONObjBuilder like API, but methods return a Status.
         //
 
-        void appendBool(const StringData& fieldName, bool boolVal);
-        void appendInt(const StringData& fieldName, int32_t intVal);
-        void appendLong(const StringData& fieldName, int64_t longVal);
-        void appendTS(const StringData& fieldName, OpTime tsVal);
-        void appendDate(const StringData& fieldName, int64_t millis);
-        void appendDouble(const StringData& fieldName, double doubleVal);
-        void appendOID(const StringData& fieldName, const mongo::OID& oid);
-        void appendString(const StringData& fieldName, const StringData& stringVal);
-        void appendCode(const StringData& fieldName, const StringData& code);
-        void appendSymbol(const StringData& fieldName, const StringData& symbol);
-        void appendNull(const StringData& fieldName);
-        void appendMinKey(const StringData& fieldName);
-        void appendMaxKey(const StringData& fieldName);
-        void appendElement(const StringData& fieldName, Element e);
+        Status appendBool(const StringData& fieldName, bool boolVal);
+        Status appendInt(const StringData& fieldName, int32_t intVal);
+        Status appendLong(const StringData& fieldName, int64_t longVal);
+        Status appendTS(const StringData& fieldName, OpTime tsVal);
+        Status appendDate(const StringData& fieldName, int64_t millis);
+        Status appendDouble(const StringData& fieldName, double doubleVal);
+        Status appendOID(const StringData& fieldName, const mongo::OID& oid);
+        Status appendString(const StringData& fieldName, const StringData& stringVal);
+        Status appendCode(const StringData& fieldName, const StringData& code);
+        Status appendSymbol(const StringData& fieldName, const StringData& symbol);
+        Status appendNull(const StringData& fieldName);
+        Status appendMinKey(const StringData& fieldName);
+        Status appendMaxKey(const StringData& fieldName);
 
-        void appendDBRef(
+        Status appendDBRef(
             const StringData& fieldName, const StringData& ns, const mongo::OID& oid);
-        void appendRegex(
+        Status appendRegex(
             const StringData& fieldName, const StringData& re, const StringData& flags);
-        void appendCodeWScope(
+        Status appendCodeWScope(
             const StringData& fieldName, const StringData& code, const StringData& scope);
-        void appendBinary(
+        Status appendBinary(
             const StringData& fieldName, uint32_t len, BinDataType t, const void* bin);
 
-        void appendSafeNum(const StringData& fieldName, const SafeNum num);
+        Status appendSafeNum(const StringData& fieldName, const SafeNum num);
 
         //
         // operator overloading
@@ -223,8 +217,8 @@ namespace mutablebson {
         uint32_t getRep() const;
         void setRep(uint32_t rep);
 
-        Context* getContext() const;
-        void setContext(Context* ctx);
+        Document* getDocument() const;
+        void setDocument(Document* doc);
 
         std::string fieldName() const;
         int fieldNameSize() const;
@@ -250,23 +244,26 @@ namespace mutablebson {
         Status checkSubtreeIsClean(Element e);
 
     private:
-        // We carry the context in every element.  The context determines the element:
-        // '_rep' is resolved through the context ElementVector and Heap
+        // We carry the document in every element. The document determines the element:
+        // '_rep' is resolved through the document ElementVector and Heap
+        Document* _doc;
         uint32_t _rep;
-        Context* _ctx;
     };
 
     /**
-     * Context contains the factory methods for creating new nodes.  Storage is allocated for
-     * the nodes within the Content heap, and the document tree structure is stored in the
-     * context ElementVector.
-     *  
+     * Document contains the root node, and factory methods for
+     * creating new nodes.  Storage is allocated for the nodes within
+     * the Content heap, and the document tree structure is stored in
+     * the document ElementVector.
+     *
      * For example usage, see class Element.
      */
-    class Context {
+    class Document {
+        MONGO_DISALLOW_COPYING(Document);
+
     public:
-        explicit Context(Heap* heap);
-        ~Context();
+        explicit Document(Heap* heap);
+        ~Document();
 
         //
         // getters, (setters?)
@@ -277,6 +274,14 @@ namespace mutablebson {
         std::string getString(uint32_t offset) const;
         char* getStringBuffer(uint32_t offset) const;
         uint32_t elementVectorSize() const;
+
+
+        //
+        // The distinguished root Element of the document, which is
+        // always an Object element.
+        //
+        Element& root() { return _root; }
+        const Element& root() const { return _root; }
 
         //
         // factory methods
@@ -313,8 +318,9 @@ namespace mutablebson {
         friend class SubtreeIterator;
         friend class SiblingIterator;
 
-        Heap* _heap;
-        ElementVector* _elements;
+        Heap* const _heap;
+        boost::scoped_ptr<ElementVector> _elements;
+        Element _root;
     };
 
     //
@@ -335,11 +341,11 @@ namespace mutablebson {
         Element operator->();
 
         // acessors
-        Context* getContext() const;
+        Document* getDocument() const;
         uint32_t getRep() const;
 
     protected:
-        Context* _ctx;
+        Document* _doc;
         uint32_t _theRep;
     };
 

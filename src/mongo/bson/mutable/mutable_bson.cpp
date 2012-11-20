@@ -13,12 +13,14 @@
  * limitations under the License.
  */
 
+#include "mongo/platform/basic.h"
+
 #include "mongo/bson/mutable/mutable_bson.h"
 
 #include <algorithm>
+#include <cstdlib>
+#include <cstring>
 #include <sstream>
-#include <string.h>
-#include <stdlib.h>
 
 #include "mongo/bson/mutable/mutable_bson_heap.h"
 #include "mongo/bson/mutable/mutable_bson_internal.h"
@@ -43,46 +45,37 @@ namespace mutablebson {
                                            "                            ",
                                            "                                " };
 
-    //
-    // Element implementation
-    //
-
-    Element::~Element() {
-    }
-
-    Element::Element(Context* ctx, uint32_t rep) : _rep(rep), _ctx(ctx) {}
-
     // for debugging only:
-    //ElementRep& Element::getElementRep() { return _ctx->_elements->_vec[_rep]; }
-    //ElementRep& Element::getElementRep() const { return _ctx->_elements->_vec[_rep]; }
+    //ElementRep& Element::getElementRep() { return _doc->_elements->_vec[_rep]; }
+    //ElementRep& Element::getElementRep() const { return _doc->_elements->_vec[_rep]; }
 
     uint32_t Element::getRep() const { return _rep; }
     void Element::setRep(uint32_t rep) { _rep = rep; }
-    Context* Element::getContext() const { return _ctx; }
-    void Element::setContext(Context* ctx) { _ctx = ctx; }
+    Document* Element::getDocument() const { return _doc; }
+    void Element::setDocument(Document* doc) { _doc = doc; }
 
     //
     // Element navigation
     //
 
     Element Element::leftChild() const {
-        return Element(_ctx, _ctx->_elements->_vec[_rep]._child._left);
+        return Element(_doc, _doc->_elements->_vec[_rep]._child._left);
     }
 
     Element Element::rightChild() const {
-        return Element(_ctx, _ctx->_elements->_vec[_rep]._child._right);
+        return Element(_doc, _doc->_elements->_vec[_rep]._child._right);
     }
 
     Element Element::leftSibling() const {
-        return Element(_ctx, _ctx->_elements->_vec[_rep]._sibling._left);
+        return Element(_doc, _doc->_elements->_vec[_rep]._sibling._left);
     }
 
     Element Element::rightSibling() const {
-        return Element(_ctx, _ctx->_elements->_vec[_rep]._sibling._right);
+        return Element(_doc, _doc->_elements->_vec[_rep]._sibling._right);
     }
 
     Element Element::parent() const {
-        return Element(_ctx, _ctx->_elements->_vec[_rep]._parent);
+        return Element(_doc, _doc->_elements->_vec[_rep]._parent);
     }
 
     SiblingIterator Element::children() {
@@ -95,12 +88,12 @@ namespace mutablebson {
     }
 
     std::string Element::fieldName() const {
-        return _ctx->getString(_ctx->_elements->_vec[_rep]._nameref);
+        return _doc->getString(_doc->_elements->_vec[_rep]._nameref);
     }
 
     /** Needs optimization to avoid allocating a string. (aaron) */
     int Element::fieldNameSize() const {
-        return _ctx->getString(_ctx->_elements->_vec[_rep]._nameref).size();
+        return _doc->getString(_doc->_elements->_vec[_rep]._nameref).size();
     }
 
     //
@@ -116,8 +109,8 @@ namespace mutablebson {
             return Status(ErrorCodes::IllegalOperation, "trying to add child to atomic node");
        }
 
-        ElementRep& thisRep = _ctx->_elements->_vec[_rep];
-        ElementRep& newRep = e._ctx->_elements->_vec[e._rep];
+        ElementRep& thisRep = _doc->_elements->_vec[_rep];
+        ElementRep& newRep = e._doc->_elements->_vec[e._rep];
 
         /* check that new element roots a clean subtree, no dangling references */
         Status s = checkSubtreeIsClean(e);
@@ -128,7 +121,7 @@ namespace mutablebson {
         /* link to end of the existing sibling list */
         newRep._sibling._left = thisRep._child._right;
         if (thisRep._child._right != EMPTY_REP) {
-            ElementRep& rightRep = _ctx->_elements->_vec[thisRep._child._right];
+            ElementRep& rightRep = _doc->_elements->_vec[thisRep._child._right];
             rightRep._sibling._right = e._rep;
         }
         else {
@@ -149,8 +142,8 @@ namespace mutablebson {
             return Status(ErrorCodes::IllegalOperation, "trying to add null node as sibling");
         }
 
-        ElementRep& thisRep = _ctx->_elements->_vec[_rep];
-        ElementRep& newRep = e._ctx->_elements->_vec[e._rep];
+        ElementRep& thisRep = _doc->_elements->_vec[_rep];
+        ElementRep& newRep = e._doc->_elements->_vec[e._rep];
 
         /* check that new element roots a clean subtree, no dangling references */
         Status s = checkSubtreeIsClean(e);
@@ -162,13 +155,13 @@ namespace mutablebson {
         newRep._sibling._right = thisRep._sibling._right;
         thisRep._sibling._right = e.getRep();
         if (newRep._sibling._right != EMPTY_REP) {
-            ElementRep& rightRep = _ctx->_elements->_vec[newRep._sibling._right];
+            ElementRep& rightRep = _doc->_elements->_vec[newRep._sibling._right];
             rightRep._sibling._left = e.getRep();
         }
 
         /* fix parent right child */
         if (thisRep._parent != EMPTY_REP) {
-            ElementRep& parentRep = _ctx->_elements->_vec[thisRep._parent];
+            ElementRep& parentRep = _doc->_elements->_vec[thisRep._parent];
             if (parentRep._child._right ==_rep) {
                 parentRep._child._right=e.getRep();
             }
@@ -186,8 +179,8 @@ namespace mutablebson {
             return Status(ErrorCodes::IllegalOperation, "trying to add null node as sibling");
         }
 
-        ElementRep& thisRep = _ctx->_elements->_vec[_rep];
-        ElementRep& newRep = e._ctx->_elements->_vec[e._rep];
+        ElementRep& thisRep = _doc->_elements->_vec[_rep];
+        ElementRep& newRep = e._doc->_elements->_vec[e._rep];
 
         /* check that new element roots a clean subtree, no dangling references */
         Status s = checkSubtreeIsClean(e);
@@ -199,13 +192,13 @@ namespace mutablebson {
         newRep._sibling._left = thisRep._sibling._left;
         thisRep._sibling._left = e.getRep();
         if (newRep._sibling._left != EMPTY_REP) {
-            ElementRep& leftRep = _ctx->_elements->_vec[newRep._sibling._left];
+            ElementRep& leftRep = _doc->_elements->_vec[newRep._sibling._left];
             leftRep._sibling._right = e.getRep();
         }
 
         /* fix parent left child */
         if (thisRep._parent != EMPTY_REP) {
-            ElementRep& parentRep = _ctx->_elements->_vec[thisRep._parent];
+            ElementRep& parentRep = _doc->_elements->_vec[thisRep._parent];
             if (parentRep._child._left == _rep) {
                 parentRep._child._left=e.getRep();
             }
@@ -216,23 +209,23 @@ namespace mutablebson {
 
     Status Element::remove() {
 
-        ElementRep& thisRep = _ctx->_elements->_vec[_rep];
+        ElementRep& thisRep = _doc->_elements->_vec[_rep];
         if (thisRep._parent == EMPTY_REP) {
             return Status(ErrorCodes::IllegalOperation, "trying to remove document root node");
         }
 
         /* skip over the element being deleted */
         if (thisRep._sibling._right != EMPTY_REP) {
-            ElementRep& rightRep = _ctx->_elements->_vec[thisRep._sibling._right];
+            ElementRep& rightRep = _doc->_elements->_vec[thisRep._sibling._right];
             rightRep._sibling._left = thisRep._sibling._left;
         }
         if (thisRep._sibling._left != EMPTY_REP) {
-            ElementRep& leftRep = _ctx->_elements->_vec[thisRep._sibling._left];
+            ElementRep& leftRep = _doc->_elements->_vec[thisRep._sibling._left];
             leftRep._sibling._right = thisRep._sibling._right;
         }
 
         /* fix parent right child, if needed */
-        ElementRep& parentRep = _ctx->_elements->_vec[thisRep._parent];
+        ElementRep& parentRep = _doc->_elements->_vec[thisRep._parent];
         if (parentRep._child._right == getRep()) {
             parentRep._child._right = thisRep._sibling._left;
         }
@@ -251,8 +244,8 @@ namespace mutablebson {
     }
 
     Status Element::rename(const std::string& newName) {
-        ElementRep& thisRep = _ctx->_elements->_vec[_rep];
-        thisRep._nameref = _ctx->getHeap()->putString(newName);
+        ElementRep& thisRep = _doc->_elements->_vec[_rep];
+        thisRep._nameref = _doc->getHeap()->putString(newName);
         return Status::OK();
     }
 
@@ -273,12 +266,12 @@ namespace mutablebson {
         if (type() != mongo::Array) {
             return Status(ErrorCodes::IllegalOperation, "size on non-array");
         }
-        ElementRep& er = _ctx->_elements->_vec[_rep];
+        ElementRep& er = _doc->_elements->_vec[_rep];
         if (er._child._left == EMPTY_REP) {
             *i = 0;
         }
         else {
-            Element e(_ctx, er._child._left);
+            Element e(_doc, er._child._left);
             uint32_t n = 0;
             for (SiblingIterator sibIt(e); !sibIt.done(); ++sibIt) ++n;
             *i = n;
@@ -290,11 +283,11 @@ namespace mutablebson {
         if (type() != mongo::Array) {
             return Status(ErrorCodes::IllegalOperation, "peekBack on non-array");
         }
-        ElementRep& er = _ctx->_elements->_vec[_rep];
+        ElementRep& er = _doc->_elements->_vec[_rep];
         if (er._child._right == EMPTY_REP) {
             return Status(ErrorCodes::EmptyArrayOperation, "peekBack on empty array");
         }
-        *ep = Element(_ctx, er._child._right);
+        *ep = Element(_doc, er._child._right);
         return Status::OK();
     }
 
@@ -310,7 +303,7 @@ namespace mutablebson {
         if (type() != mongo::Array) {
             return Status(ErrorCodes::IllegalOperation, "popBack on non-array");
         }
-        ElementRep& er = _ctx->_elements->_vec[_rep];
+        ElementRep& er = _doc->_elements->_vec[_rep];
         if (er._child._right == EMPTY_REP) {
             return Status(ErrorCodes::EmptyArrayOperation, "popBack on empty array");
         }
@@ -322,11 +315,11 @@ namespace mutablebson {
         if (type() != mongo::Array) {
             return Status(ErrorCodes::IllegalOperation, "peekFront on non-array");
         }
-        ElementRep& er = _ctx->_elements->_vec[_rep];
+        ElementRep& er = _doc->_elements->_vec[_rep];
         if (er._child._left == EMPTY_REP) {
             return Status(ErrorCodes::EmptyArrayOperation, "peekFront on empty array");
         }
-        *ep = Element(_ctx, er._child._left);
+        *ep = Element(_doc, er._child._left);
         return Status::OK();
     }
 
@@ -334,7 +327,7 @@ namespace mutablebson {
         if (type() != mongo::Array) {
             return Status(ErrorCodes::IllegalOperation, "pushFront on non-array");
         }
-        ElementRep& er = _ctx->_elements->_vec[_rep];
+        ElementRep& er = _doc->_elements->_vec[_rep];
         if (er._child._left == EMPTY_REP) {
             addChild(e);
         }
@@ -348,7 +341,7 @@ namespace mutablebson {
         if (type() != mongo::Array) {
             return Status(ErrorCodes::IllegalOperation, "popFront on non-array");
         }
-        ElementRep& er = _ctx->_elements->_vec[_rep];
+        ElementRep& er = _doc->_elements->_vec[_rep];
         if (er._child._left == EMPTY_REP) {
             return Status(ErrorCodes::EmptyArrayOperation, "popFront on empty array");
         }
@@ -360,16 +353,16 @@ namespace mutablebson {
         if (type() != mongo::Array) {
             return Status(ErrorCodes::IllegalOperation, "get(index, &e) on non-array");
         }
-        ElementRep& thisRep = _ctx->_elements->_vec[_rep];
+        ElementRep& thisRep = _doc->_elements->_vec[_rep];
         if (thisRep._child._left == EMPTY_REP) {
             return Status(ErrorCodes::IllegalOperation, "get(index, &e) on empty array");
         }
-        Element eLeft(_ctx, thisRep._child._left);
+        Element eLeft(_doc, thisRep._child._left);
         uint32_t n = 0;
         SiblingIterator sibIt(eLeft);
         for (; !sibIt.done() && n < index; ++sibIt) ++n;
         if (sibIt.done()) {
-            *ep = Element(_ctx, EMPTY_REP);
+            *ep = Element(_doc, EMPTY_REP);
             return Status(ErrorCodes::IllegalOperation, "get(index, &e) out of bounds");
         }
         *ep = (*sibIt);
@@ -384,11 +377,11 @@ namespace mutablebson {
             return Status(ErrorCodes::IllegalOperation,
                               "set(index, e) source is non-simple type node");
         }
-        ElementRep& thisRep = _ctx->_elements->_vec[_rep];
+        ElementRep& thisRep = _doc->_elements->_vec[_rep];
         if (thisRep._child._left == EMPTY_REP) {
             return Status(ErrorCodes::IllegalOperation, "set(index, e) on empty array");
         }
-        Element eLeft(_ctx, thisRep._child._left);
+        Element eLeft(_doc, thisRep._child._left);
         if (!eLeft.isSimpleType()) {
             return Status(ErrorCodes::IllegalOperation,
                               "set(index, e) target is non-simple type node");
@@ -399,8 +392,8 @@ namespace mutablebson {
         if (sibIt.done()) {
             return Status(ErrorCodes::IllegalOperation, "get(index, e) out of bounds");
         }
-ElementRep& dstRep = _ctx->_elements->_vec[(*sibIt)._rep];
-        ElementRep& srcRep = _ctx->_elements->_vec[e._rep];
+ElementRep& dstRep = _doc->_elements->_vec[(*sibIt)._rep];
+        ElementRep& srcRep = _doc->_elements->_vec[e._rep];
         dstRep._value = srcRep._value;
         return Status::OK();
     }
@@ -410,22 +403,27 @@ ElementRep& dstRep = _ctx->_elements->_vec[(*sibIt)._rep];
     //
 
     bool Element::getBoolValue() const {
-        return _ctx->_elements->_vec[_rep]._value.boolVal;
+        return _doc->_elements->_vec[_rep]._value.boolVal;
     }
     int32_t Element::getIntValue() const {
-        return _ctx->_elements->_vec[_rep]._value.intVal;
+        return _doc->_elements->_vec[_rep]._value.intVal;
     }
     int64_t Element::getLongValue() const {
-        return _ctx->_elements->_vec[_rep]._value.longVal;
+        return _doc->_elements->_vec[_rep]._value.longVal;
     }
     OpTime Element::getTSValue() const {
-        return OpTime(_ctx->_elements->_vec[_rep]._value.tsVal);
+        return OpTime(_doc->_elements->_vec[_rep]._value.tsVal);
+    }
+    int64_t Element::getDateValue() const {
+        return _doc->_elements->_vec[_rep]._value.dateVal;
     }
     double Element::getDoubleValue() const {
-        return _ctx->_elements->_vec[_rep]._value.doubleVal;
+        return _doc->_elements->_vec[_rep]._value.doubleVal;
     }
-    const char* Element::getOIDValue() const {
-        return getStringValue();
+    OID Element::getOIDValue() const {
+        return OID(
+            reinterpret_cast<const unsigned char (&)[OID::kOIDSize]>(
+                _doc->_elements->_vec[_rep]._value.shortStr));
     }
     const char* Element::getRegexValue() const {
         return getStringValue();
@@ -433,21 +431,21 @@ ElementRep& dstRep = _ctx->_elements->_vec[(*sibIt)._rep];
 
     const char* Element::getStringValue() const {
         if (isInlineType()) {
-            return &_ctx->_elements->_vec[_rep]._value.shortStr[0];
+            return &_doc->_elements->_vec[_rep]._value.shortStr[0];
         }
         else {
-            return _ctx->getStringBuffer(_ctx->_elements->_vec[_rep]._value.valueRef);
+            return _doc->getStringBuffer(_doc->_elements->_vec[_rep]._value.valueRef);
         }
     }
 
     SafeNum Element::getSafeNumValue() const {
-        switch (_ctx->_elements->_vec[_rep]._type) {
+        switch (_doc->_elements->_vec[_rep]._type) {
         case mongo::NumberInt:
-            return SafeNum(_ctx->_elements->_vec[_rep]._value.intVal);
+            return SafeNum(_doc->_elements->_vec[_rep]._value.intVal);
         case mongo::NumberLong:
-            return SafeNum(static_cast<long long int>(_ctx->_elements->_vec[_rep]._value.longVal));
+            return SafeNum(static_cast<long long int>(_doc->_elements->_vec[_rep]._value.longVal));
         case mongo::NumberDouble:
-            return SafeNum(_ctx->_elements->_vec[_rep]._value.doubleVal);
+            return SafeNum(_doc->_elements->_vec[_rep]._value.doubleVal);
         default:
             return SafeNum();
         }
@@ -455,67 +453,68 @@ ElementRep& dstRep = _ctx->_elements->_vec[(*sibIt)._rep];
 
 
     void Element::setBoolValue(bool boolVal) {
-        ElementRep& e = _ctx->_elements->_vec[_rep];
+        ElementRep& e = _doc->_elements->_vec[_rep];
         e._type = mongo::Bool;
         e._value.boolVal = boolVal;
     }
 
     void Element::setIntValue(int32_t intVal) {
-        ElementRep& e = _ctx->_elements->_vec[_rep];
+        ElementRep& e = _doc->_elements->_vec[_rep];
         e._type = mongo::NumberInt;
         e._value.intVal = intVal;
     }
 
     void Element::setLongValue(int64_t longVal) {
-        ElementRep& e = _ctx->_elements->_vec[_rep];
+        ElementRep& e = _doc->_elements->_vec[_rep];
         e._type = mongo::NumberLong;
         e._value.longVal = longVal;
     }
 
     void Element::setTSValue(OpTime tsVal) {
-        ElementRep& e = _ctx->_elements->_vec[_rep];
+        ElementRep& e = _doc->_elements->_vec[_rep];
         e._type = mongo::Timestamp;
         e._value.tsVal = tsVal.asDate();
     }
 
     void Element::setDateValue(int64_t dateVal) {
-        ElementRep& e = _ctx->_elements->_vec[_rep];
+        ElementRep& e = _doc->_elements->_vec[_rep];
         e._type = mongo::Date;
         e._value.dateVal = dateVal;
     }
 
     void Element::setDoubleValue(double doubleVal) {
-        ElementRep& e = _ctx->_elements->_vec[_rep];
+        ElementRep& e = _doc->_elements->_vec[_rep];
         e._type = mongo::NumberDouble;
         e._value.doubleVal = doubleVal;
     }
 
-    void Element::setOIDValue(const StringData& oid) {
-        ElementRep& e = _ctx->_elements->_vec[_rep];
+    void Element::setOIDValue(const OID& oid) {
+        ElementRep& e = _doc->_elements->_vec[_rep];
         e._type = mongo::jstOID;
-        strncpy(e._value.shortStr, oid.data(), 12);
+        BOOST_STATIC_ASSERT(mongo::OID::kOIDSize <= sizeof(e._value.shortStr));
+        std::memcpy(e._value.shortStr, reinterpret_cast<const char*>(oid.getData()), OID::kOIDSize);
     }
 
     void Element::setRegexValue(const StringData& re) {
         // type is set to "string" in setStringValue
         setStringValue(re);
-        _ctx->_elements->_vec[_rep]._type = mongo::RegEx;
+        _doc->_elements->_vec[_rep]._type = mongo::RegEx;
     }
 
     void Element::setStringValue(const StringData& stringVal) {
-        ElementRep& e = _ctx->_elements->_vec[_rep];
+        ElementRep& e = _doc->_elements->_vec[_rep];
         e._type = mongo::String;
         if (stringVal.size() < SHORT_LIMIT) {
             strcpy(e._value.shortStr, stringVal.data());
             e._type |= SHORTBIT;
         }
         else {
-            e._value.valueRef = _ctx->_heap->putString(stringVal);
+            e._value.valueRef = _doc->_heap->putString(stringVal);
         }
     }
 
     void Element::setSafeNumValue(const SafeNum& safeNumVal) {
-        ElementRep& e = _ctx->_elements->_vec[_rep];
+        ElementRep& e = _doc->_elements->_vec[_rep];
         e._type = safeNumVal.type();
         switch (e._type) {
         case mongo::NumberInt:
@@ -534,67 +533,11 @@ ElementRep& dstRep = _ctx->_elements->_vec[(*sibIt)._rep];
     }
 
     //
-    // Element BSONElement compatibility
-    //
-
-    std::string Element::String() const {
-        ElementRep& e = _ctx->_elements->_vec[_rep];
-        if (isInlineType()) return e._value.shortStr;
-        return _ctx->getHeap()->getString(e._value.valueRef);
-    }
-
-    Date_t Element::Date() const {
-        return Date_t();
-    }
-
-    double Element::Number() const {
-        ElementRep& e = _ctx->_elements->_vec[_rep];
-        switch (type()) {
-        case mongo::NumberDouble: return e._value.doubleVal; break;
-        case mongo::Bool: return e._value.boolVal; break;
-        case mongo::NumberInt: return e._value.intVal; break;
-        case mongo::NumberLong : return e._value.longVal; break;
-
-        case mongo::String: case mongo::Object: case mongo::Array: case mongo::BinData:
-        case mongo::Undefined: case mongo::jstOID: case mongo::Date: case mongo::jstNULL:
-        case mongo::RegEx: case mongo::Symbol: case mongo::CodeWScope: case mongo::Timestamp :
-        case mongo::MaxKey: case mongo::MinKey: case mongo::EOO:
-        default: return 0.0;
-        }
-    }
-
-    double Element::Double() const {
-        return _ctx->_elements->_vec[_rep]._value.doubleVal;
-    }
-
-    long long Element::Long() const {
-        return _ctx->_elements->_vec[_rep]._value.longVal;
-    }
-
-    int Element::Int() const {
-        return _ctx->_elements->_vec[_rep]._value.intVal;
-    }
-
-    bool Element::Bool() const {
-        return _ctx->_elements->_vec[_rep]._value.boolVal;
-    }
-
-    mongo::OID Element::OID() const {
-        return mongo::OID(&_ctx->_elements->_vec[_rep]._value.shortStr[0]);
-    }
-
-    /* stub */
-    const void* Element::BinData() const {
-        return NULL;
-    }
-
-
-    //
     // decoders
     //
 
     Status Element::prefix(std::string* result, char delim) const {
-        std::string s = String();
+        std::string s = getStringValue();
         size_t n = s.find(delim);
         if (n == std::string::npos) {
             return Status(ErrorCodes::IllegalOperation, "expecting regex format /PAT/flags");
@@ -608,7 +551,7 @@ ElementRep& dstRep = _ctx->_elements->_vec[(*sibIt)._rep];
     }
 
     Status Element::suffix(std::string* result, char delim) const {
-        std::string s = String();
+        std::string s = getStringValue();
         size_t n = s.find(delim);
         if (n == std::string::npos) {
             return Status(ErrorCodes::IllegalOperation, "expecting regex format ./.pat/flags");
@@ -650,7 +593,7 @@ ElementRep& dstRep = _ctx->_elements->_vec[(*sibIt)._rep];
     //
 
     bool Element::isBoolean() const {
-        return (_ctx->_elements->_vec[_rep]._type == mongo::Bool);
+        return (_doc->_elements->_vec[_rep]._type == mongo::Bool);
     }
 
     bool Element::isNonAtomic() const {
@@ -689,104 +632,95 @@ ElementRep& dstRep = _ctx->_elements->_vec[(*sibIt)._rep];
     }
 
     BSONType Element::type() const {
-        ElementRep& e = _ctx->_elements->_vec[_rep];
+        ElementRep& e = _doc->_elements->_vec[_rep];
         int32_t t = e._type;
         if ((t >= 0) && (t & SHORTBIT)) t ^= SHORTBIT;
         return static_cast<BSONType>(t);
     }
 
     bool Element::isInlineType() const {
-        ElementRep& e = _ctx->_elements->_vec[_rep];
+        ElementRep& e = _doc->_elements->_vec[_rep];
         int32_t t = e._type;
         if ((t >= 0) && (t & SHORTBIT)) return true;
         return false;
     }
 
-
-    //
-    // Element stream API - BSONObjBuilder compatibility
-    //
-
-    void Element::appendBool(const StringData& fieldName, bool boolVal) {
-        addChild(_ctx->makeBoolElement(fieldName, boolVal));
+    // TODO: These should be probably be made inline.
+    Status Element::appendBool(const StringData& fieldName, bool boolVal) {
+        return addChild(_doc->makeBoolElement(fieldName, boolVal));
     }
 
-    void Element::appendInt(const StringData& fieldName, int32_t intVal) {
-        addChild(_ctx->makeIntElement(fieldName, intVal));
+    Status Element::appendInt(const StringData& fieldName, int32_t intVal) {
+        return addChild(_doc->makeIntElement(fieldName, intVal));
     }
 
-    void Element::appendLong(const StringData& fieldName, int64_t longVal) {
-        addChild(_ctx->makeLongElement(fieldName, longVal));
+    Status Element::appendLong(const StringData& fieldName, int64_t longVal) {
+        return addChild(_doc->makeLongElement(fieldName, longVal));
     }
 
-    void Element::appendTS(const StringData& fieldName, OpTime tsVal) {
-        addChild(_ctx->makeTSElement(fieldName, tsVal));
+    Status Element::appendTS(const StringData& fieldName, OpTime tsVal) {
+        return addChild(_doc->makeTSElement(fieldName, tsVal));
     }
 
-    void Element::appendDate(const StringData& fieldName, int64_t millis) {
-        addChild(_ctx->makeDateElement(fieldName, millis));
+    Status Element::appendDate(const StringData& fieldName, int64_t millis) {
+        return addChild(_doc->makeDateElement(fieldName, millis));
     }
 
-    void Element::appendDouble(const StringData& fieldName, double doubleVal) {
-        addChild(_ctx->makeDoubleElement(fieldName, doubleVal));
+    Status Element::appendDouble(const StringData& fieldName, double doubleVal) {
+        return addChild(_doc->makeDoubleElement(fieldName, doubleVal));
     }
 
-    void Element::appendOID(const StringData& fieldName, const mongo::OID& oid) {
-        addChild(_ctx->makeOIDElement(fieldName, oid));
+    Status Element::appendOID(const StringData& fieldName, const mongo::OID& oid) {
+        return addChild(_doc->makeOIDElement(fieldName, oid));
     }
 
-    void Element::appendString(const StringData& fieldName, const StringData& stringVal) {
-        addChild(_ctx->makeStringElement(fieldName, stringVal));
+    Status Element::appendString(const StringData& fieldName, const StringData& stringVal) {
+        return addChild(_doc->makeStringElement(fieldName, stringVal));
     }
 
-    void Element::appendCode(const StringData& fieldName, const StringData& code) {
-        addChild(_ctx->makeCodeElement(fieldName, code));
+    Status Element::appendCode(const StringData& fieldName, const StringData& code) {
+        return addChild(_doc->makeCodeElement(fieldName, code));
     }
 
-    void Element::appendSymbol(const StringData& fieldName, const StringData& symbol) {
-        addChild(_ctx->makeSymbolElement(fieldName, symbol));
+    Status Element::appendSymbol(const StringData& fieldName, const StringData& symbol) {
+        return addChild(_doc->makeSymbolElement(fieldName, symbol));
     }
 
-    void Element::appendNull(const StringData& fieldName) {
-        addChild(_ctx->makeNullElement(fieldName));
+    Status Element::appendNull(const StringData& fieldName) {
+        return addChild(_doc->makeNullElement(fieldName));
     }
 
-    void Element::appendMinKey(const StringData& fieldName) {
-        addChild(_ctx->makeMinKeyElement(fieldName));
+    Status Element::appendMinKey(const StringData& fieldName) {
+        return addChild(_doc->makeMinKeyElement(fieldName));
     }
 
-    void Element::appendMaxKey(const StringData& fieldName) {
-        addChild(_ctx->makeMaxKeyElement(fieldName));
+    Status Element::appendMaxKey(const StringData& fieldName) {
+        return addChild(_doc->makeMaxKeyElement(fieldName));
     }
 
-    void Element::appendRegex( const StringData& fieldName,
+    Status Element::appendRegex( const StringData& fieldName,
         const StringData& re, const StringData& flags) {
-        addChild(_ctx->makeRegexElement(fieldName, re, flags));
+        return addChild(_doc->makeRegexElement(fieldName, re, flags));
     }
 
-    void Element::appendCodeWScope( const StringData& fieldName,
+    Status Element::appendCodeWScope( const StringData& fieldName,
         const StringData& code, const StringData& scope) {
-        addChild(_ctx->makeCodeWScopeElement(fieldName, code, scope));
+        return addChild(_doc->makeCodeWScopeElement(fieldName, code, scope));
     }
 
-    void Element::appendDBRef( const StringData& fieldName,
+    Status Element::appendDBRef( const StringData& fieldName,
         const StringData& ns, const mongo::OID& oid) {
-        addChild(_ctx->makeDBRefElement(fieldName, ns, oid));
+        return addChild(_doc->makeDBRefElement(fieldName, ns, oid));
     }
 
-    void Element::appendBinary( const StringData& fieldName,
+    Status Element::appendBinary( const StringData& fieldName,
         uint32_t len, mongo::BinDataType binType, const void* data) {
-        addChild(_ctx->makeBinaryElement(fieldName, len, binType, data));
+        return addChild(_doc->makeBinaryElement(fieldName, len, binType, data));
     }
 
-    void Element::appendSafeNum(const StringData& fieldName, const SafeNum num) {
-        addChild(_ctx->makeSafeNumElement(fieldName, num));
+    Status Element::appendSafeNum(const StringData& fieldName, const SafeNum num) {
+        return addChild(_doc->makeSafeNumElement(fieldName, num));
     }
-
-    void Element::appendElement(const StringData& fieldName, Element e) {
-        addChild(e);
-    }
-
 
     //
     // Element output methods - mainly for debugging
@@ -796,22 +730,22 @@ ElementRep& dstRep = _ctx->_elements->_vec[(*sibIt)._rep];
         switch (type()) {
         case mongo::MinKey: os << "MinKey"; break;
         case mongo::EOO: os << "EOO"; break;
-        case mongo::NumberDouble: os << Double(); break;
-        case mongo::String: os << "\"" << String() << "\""; break;
+        case mongo::NumberDouble: os << getDoubleValue(); break;
+        case mongo::String: os << "\"" << getStringValue() << "\""; break;
         case mongo::Object: break;
         case mongo::Array: break;
-        case mongo::BinData: os << "|" << String() << "|"; break;
+        case mongo::BinData: os << "|" << getStringValue() << "|"; break;
         case mongo::Undefined: os << "Undefined"; break;
-        case mongo::jstOID: os << OID(); break;
-        case mongo::Bool: os << Bool(); break;
-        case mongo::Date: os << Date(); break;
+        case mongo::jstOID: os << getOIDValue(); break;
+        case mongo::Bool: os << getBoolValue(); break;
+        case mongo::Date: os << getDateValue(); break;
         case mongo::jstNULL: os << "jstNULL"; break;
-        case mongo::RegEx: os << "Regex(\"" << String() << "\")"; break;
-        case mongo::Symbol: os << "Symbol(\"" << String() << "\")"; break;
-        case mongo::CodeWScope: os << "CodeWithScope(\"" << String() << "\")"; break;
-        case mongo::NumberInt: os << Int(); break;
-        case mongo::Timestamp : os << Date(); break;
-        case mongo::NumberLong : os << Long(); break;
+        case mongo::RegEx: os << "Regex(\"" << getStringValue() << "\")"; break;
+        case mongo::Symbol: os << "Symbol(\"" << getStringValue() << "\")"; break;
+        case mongo::CodeWScope: os << "CodeWithScope(\"" << getStringValue() << "\")"; break;
+        case mongo::NumberInt: os << getIntValue(); break;
+        case mongo::Timestamp : os << getDateValue(); break;
+        case mongo::NumberLong : os << getLongValue(); break;
         case mongo::MaxKey: os << "MaxKey"; break;
         default:;
         }
@@ -845,7 +779,7 @@ ElementRep& dstRep = _ctx->_elements->_vec[(*sibIt)._rep];
 
     std::ostream& Element::put(std::ostream& os, uint32_t depth) const {
 
-        ElementRep& e = _ctx->_elements->_vec[_rep];
+        ElementRep& e = _doc->_elements->_vec[_rep];
         os <<
             indentv[depth] << "[type=" << putType() <<
             ", rep=" << getRep() << ", name=" << fieldName();
@@ -858,14 +792,14 @@ ElementRep& dstRep = _ctx->_elements->_vec[(*sibIt)._rep];
             if (rightChildRep != EMPTY_REP) os << ", rightChildRep=" << rightChildRep;
             uint32_t leftChildRep = e._child._left;
             if (leftChildRep != EMPTY_REP) {
-                Element eLeft(_ctx, leftChildRep);
+                Element eLeft(_doc, leftChildRep);
                 eLeft.put(os << indentv[depth] << " leftChild=\n", depth+1) << std::endl;
             }
         }
 
         uint32_t rightSiblingRep = e._sibling._right;
         if (rightSiblingRep != EMPTY_REP) {
-            Element eRight(_ctx, rightSiblingRep);
+            Element eRight(_doc, rightSiblingRep);
             eRight.put(os << indentv[depth] << " rightSibling=\n", depth) << std::endl;
             os << indentv[depth] << ']';
         }
@@ -890,7 +824,7 @@ ElementRep& dstRep = _ctx->_elements->_vec[(*sibIt)._rep];
 
     /** check that new element roots a clean subtree, no dangling references */
     Status Element::checkSubtreeIsClean(Element e) {
-        ElementRep& rep = e._ctx->_elements->_vec[e._rep];
+        ElementRep& rep = e._doc->_elements->_vec[e._rep];
         if (rep._sibling._left != EMPTY_REP) {
             return Status(ErrorCodes::IllegalOperation, "addChild: dangling left sibling");
         }
@@ -905,69 +839,68 @@ ElementRep& dstRep = _ctx->_elements->_vec[(*sibIt)._rep];
 
 
     //
-    // Context Implementation
+    // Document Implementation
     //
 
-    Context::Context(Heap* heap) :
+    Document::Document(Heap* heap) :
         _heap(heap),
-        _elements(new ElementVector()) {
+        _elements(new ElementVector),
+        _root(makeObjElement(StringData("", StringData::LiteralTag()))) {
     }
 
-    Context::~Context() {
-        delete _elements;
-    }
+    Document::~Document() {}
 
-    std::string Context::getString(uint32_t offset) const {
+    std::string Document::getString(uint32_t offset) const {
         return _heap->getString(offset);
     }
 
-    char* Context::getStringBuffer(uint32_t offset) const {
+    char* Document::getStringBuffer(uint32_t offset) const {
         return _heap->getStringBuffer(offset);
     }
 
-    uint32_t Context::elementVectorSize() const {
+    uint32_t Document::elementVectorSize() const {
         return _elements->size();
     }
 
 
-    // Context factory methods
+    // Document factory methods
 
-    Element Context::makeObjElement(const StringData& fieldName) {
+    Element Document::makeObjElement(const StringData& fieldName) {
         uint32_t rep = _elements->size();
         uint32_t nameref = _heap->putString(fieldName);
         _elements->push_back(ElementRep(mongo::Object, nameref));
         return Element(this, rep);
     }
 
-    Element Context::makeArrayElement(const StringData& fieldName) {
+    Element Document::makeArrayElement(const StringData& fieldName) {
         uint32_t rep = _elements->size();
         uint32_t nameref = _heap->putString(fieldName);
         _elements->push_back(ElementRep(mongo::Array, nameref));
         return Element(this, rep);
     }
 
-    Element Context::makeNullElement(const StringData& fieldName) {
+    Element Document::makeNullElement(const StringData& fieldName) {
         uint32_t rep = _elements->size();
         uint32_t nameref = _heap->putString(fieldName);
         _elements->push_back(ElementRep(mongo::jstNULL, nameref));
         return Element(this, rep);
     }
 
-    Element Context::makeMinKeyElement(const StringData& fieldName) {
+    Element Document::makeMinKeyElement(const StringData& fieldName) {
         uint32_t rep = _elements->size();
         uint32_t nameref = _heap->putString(fieldName);
         _elements->push_back(ElementRep(mongo::MinKey, nameref));
         return Element(this, rep);
     }
 
-    Element Context::makeMaxKeyElement(const StringData& fieldName) {
+    Element Document::makeMaxKeyElement(const StringData& fieldName) {
         uint32_t rep = _elements->size();
         uint32_t nameref = _heap->putString(fieldName);
         _elements->push_back(ElementRep(mongo::MaxKey, nameref));
         return Element(this, rep);
     }
 
-    Element Context::makeBoolElement(const StringData& fieldName, bool b) {
+    Element Document::makeBoolElement(const StringData& fieldName, bool b) {
         uint32_t rep = _elements->size();
         uint32_t nameref = _heap->putString(fieldName);
         ValueType val;
@@ -976,7 +909,7 @@ ElementRep& dstRep = _ctx->_elements->_vec[(*sibIt)._rep];
         return Element(this, rep);
     }
 
-    Element Context::makeIntElement(const StringData& fieldName, int32_t i) {
+    Element Document::makeIntElement(const StringData& fieldName, int32_t i) {
         uint32_t rep = _elements->size();
         uint32_t nameref = _heap->putString(fieldName);
         ValueType val;
@@ -985,7 +918,7 @@ ElementRep& dstRep = _ctx->_elements->_vec[(*sibIt)._rep];
         return Element(this, rep);
     }
 
-    Element Context::makeLongElement(const StringData& fieldName, int64_t j) {
+    Element Document::makeLongElement(const StringData& fieldName, int64_t j) {
         uint32_t rep = _elements->size();
         uint32_t nameref = _heap->putString(fieldName);
         ValueType val;
@@ -994,7 +927,7 @@ ElementRep& dstRep = _ctx->_elements->_vec[(*sibIt)._rep];
         return Element(this, rep);
     }
 
-    Element Context::makeTSElement(const StringData& fieldName, OpTime ts) {
+    Element Document::makeTSElement(const StringData& fieldName, OpTime ts) {
         uint32_t rep = _elements->size();
         uint32_t nameref = _heap->putString(fieldName);
         ValueType val;
@@ -1003,7 +936,7 @@ ElementRep& dstRep = _ctx->_elements->_vec[(*sibIt)._rep];
         return Element(this, rep);
     }
 
-    Element Context::makeDateElement(const StringData& fieldName, int64_t date) {
+    Element Document::makeDateElement(const StringData& fieldName, int64_t date) {
         uint32_t rep = _elements->size();
         uint32_t nameref = _heap->putString(fieldName);
         ValueType val;
@@ -1012,7 +945,7 @@ ElementRep& dstRep = _ctx->_elements->_vec[(*sibIt)._rep];
         return Element(this, rep);
     }
 
-    Element Context::makeDoubleElement(const StringData& fieldName, double d) {
+    Element Document::makeDoubleElement(const StringData& fieldName, double d) {
         uint32_t rep = _elements->size();
         uint32_t nameref = _heap->putString(fieldName);
         ValueType val;
@@ -1021,16 +954,16 @@ ElementRep& dstRep = _ctx->_elements->_vec[(*sibIt)._rep];
         return Element(this, rep);
     }
 
-    Element Context::makeOIDElement(const StringData& fieldName, const mongo::OID& oid) {
+    Element Document::makeOIDElement(const StringData& fieldName, const mongo::OID& oid) {
         uint32_t rep = _elements->size();
         uint32_t nameref = _heap->putString(fieldName);
         ValueType val;
-        strncpy(val.shortStr, (char*)oid.getData(), 12);
+        memcpy(val.shortStr, (char*)oid.getData(), 12);
         _elements->push_back(ElementRep(mongo::jstOID, nameref, val));
         return Element(this, rep);
     }
 
-    Element Context::makeStringElement(const StringData& fieldName, const StringData& stringVal) {
+    Element Document::makeStringElement(const StringData& fieldName, const StringData& stringVal) {
         uint32_t rep = _elements->size();
         uint32_t nameref = _heap->putString(fieldName);
         ValueType val;
@@ -1045,7 +978,7 @@ ElementRep& dstRep = _ctx->_elements->_vec[(*sibIt)._rep];
         return Element(this, rep);
     }
 
-    Element Context::makeRegexElement(
+    Element Document::makeRegexElement(
         const StringData& fieldName, const StringData& re, const StringData& flags) {
         uint32_t rep = _elements->size();
         uint32_t nameref = _heap->putString(fieldName);
@@ -1055,7 +988,7 @@ ElementRep& dstRep = _ctx->_elements->_vec[(*sibIt)._rep];
         return Element(this, rep);
     }
 
-    Element Context::makeCodeElement(
+    Element Document::makeCodeElement(
         const StringData& fieldName, const StringData& code) {
         uint32_t rep = _elements->size();
         uint32_t nameref = _heap->putString(fieldName);
@@ -1065,7 +998,7 @@ ElementRep& dstRep = _ctx->_elements->_vec[(*sibIt)._rep];
         return Element(this, rep);
     }
 
-    Element Context::makeSymbolElement( const StringData& fieldName, const StringData& symbol) {
+    Element Document::makeSymbolElement( const StringData& fieldName, const StringData& symbol) {
         uint32_t rep = _elements->size();
         uint32_t nameref = _heap->putString(fieldName);
         ValueType val;
@@ -1078,22 +1011,22 @@ ElementRep& dstRep = _ctx->_elements->_vec[(*sibIt)._rep];
     Existing code appears to form strange concatenated strings with embedded nulls.
     Stubbed for now, pending better understanding. */
 
-    Element Context::makeCodeWScopeElement( const StringData& fieldName,
+    Element Document::makeCodeWScopeElement( const StringData& fieldName,
         const StringData& theCode, const StringData& theScope) {
         return Element(this,EMPTY_REP);
     }
 
-    Element Context::makeDBRefElement( const StringData& fieldName,
+    Element Document::makeDBRefElement( const StringData& fieldName,
         const StringData& ns, const mongo::OID& oid) {
         return Element(this,EMPTY_REP);
     }
 
-    Element Context::makeBinaryElement( const StringData& fieldName,
+    Element Document::makeBinaryElement( const StringData& fieldName,
         uint32_t len, mongo::BinDataType binType, const void* data) {
         return Element(this,EMPTY_REP);
     }
 
-    Element Context::makeSafeNumElement(const StringData& fieldName, const SafeNum& safeNum) {
+    Element Document::makeSafeNumElement(const StringData& fieldName, const SafeNum& safeNum) {
         uint32_t rep = _elements->size();
         uint32_t nameref = _heap->putString(fieldName);
         ValueType val;
@@ -1121,14 +1054,14 @@ ElementRep& dstRep = _ctx->_elements->_vec[(*sibIt)._rep];
     // Iterator base class
     //
 
-    Iterator::Iterator() : _ctx(NULL), _theRep(EMPTY_REP) {}
-    Iterator::Iterator(Element e) : _ctx(e.getContext()), _theRep(e.getRep()) {}
-    Iterator::Iterator(const Iterator& it) : _ctx(it._ctx), _theRep(it._theRep) {}
+    Iterator::Iterator() : _doc(NULL), _theRep(EMPTY_REP) {}
+    Iterator::Iterator(Element e) : _doc(e.getDocument()), _theRep(e.getRep()) {}
+    Iterator::Iterator(const Iterator& it) : _doc(it._doc), _theRep(it._theRep) {}
 
     uint32_t Iterator::getRep() const { return _theRep; }
-    Context* Iterator::getContext() const { return _ctx; }
-    Element Iterator::operator*() { return Element(_ctx, _theRep); }
-    Element Iterator::operator->() { return Element(_ctx, _theRep); }
+    Document* Iterator::getDocument() const { return _doc; }
+    Element Iterator::operator*() { return Element(_doc, _theRep); }
+    Element Iterator::operator->() { return Element(_doc, _theRep); }
 
     //
     // SubtreeIterator
@@ -1151,7 +1084,7 @@ ElementRep& dstRep = _ctx->_elements->_vec[(*sibIt)._rep];
     bool SubtreeIterator::advance() {
         if (_theRep == EMPTY_REP) return true;
 
-        ElementRep& er = _ctx->_elements->_vec[_theRep];
+        ElementRep& er = _doc->_elements->_vec[_theRep];
         const Element& e = **this;
 
         if (!e.isSimpleType()) {
@@ -1167,7 +1100,7 @@ ElementRep& dstRep = _ctx->_elements->_vec[(*sibIt)._rep];
 
         uint32_t count(0);
         for (_theRep = er._parent; _theRep != EMPTY_REP && count < DEPTH_LIMIT; ++count) {
-            ElementRep& e2 = _ctx->_elements->_vec[_theRep];
+            ElementRep& e2 = _doc->_elements->_vec[_theRep];
             if (e2._sibling._right != EMPTY_REP) {
                 _theRep = e2._sibling._right;
                 return false;
@@ -1203,7 +1136,7 @@ ElementRep& dstRep = _ctx->_elements->_vec[(*sibIt)._rep];
 
     bool SiblingIterator::advance() {
         if (_theRep == EMPTY_REP) return false;
-        ElementRep& e = _ctx->_elements->_vec[_theRep];
+        ElementRep& e = _doc->_elements->_vec[_theRep];
         _theRep = e._sibling._right;
         return (_theRep == EMPTY_REP);
     }
@@ -1240,7 +1173,7 @@ ElementRep& dstRep = _ctx->_elements->_vec[(*sibIt)._rep];
         while (true) {
             _theDoneBit = advance();
             if (_theDoneBit) break;
-            Element e(_ctx, _theRep);
+            Element e(_doc, _theRep);
             if (_filter->match(e)) break;
         }
         return *this;

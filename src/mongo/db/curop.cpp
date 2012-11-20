@@ -193,7 +193,7 @@ namespace mongo {
     }
 
     void CurOp::kill(bool* pNotifyFlag /* = NULL */) { 
-        _killPending.store(1); 
+        _killPending.store(1);
         if (pNotifyFlag) {
             _notifyList.push_back(pNotifyFlag);
         }

@@ -25,7 +25,7 @@ namespace mongo {
 
 namespace mutablebson {
     class Element;
-    class Context;
+    class Document;
 }
 
     /**
@@ -110,7 +110,7 @@ namespace mutablebson {
         //
 
         friend class mutablebson::Element;
-        friend class mutablebson::Context;
+        friend class mutablebson::Document;
 
         // TODO: output to builder
 
@@ -162,6 +162,6 @@ namespace mutablebson {
     };
 
     // Convenience method for unittest code. Please use accessors otherwise.
-    ostream& operator<<(ostream& os, const SafeNum& snum);
+    std::ostream& operator<<(std::ostream& os, const SafeNum& snum);
 
 } // namespace mongo

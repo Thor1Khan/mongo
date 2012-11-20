@@ -38,6 +38,13 @@ namespace mongo {
 
     AtomicInt64 DBClientBase::ConnectionIdSequence;
 
+    bool hasReadPreference(const BSONObj& queryObj) {
+        const bool isQueryEmbedded = strcmp(queryObj.firstElement().fieldName(), "query") == 0;
+        const bool hasReadPrefOption = queryObj["$queryOptions"].isABSONObj() &&
+                        queryObj["$queryOptions"].Obj().hasField("$readPreference");
+        return (isQueryEmbedded && queryObj.hasField("$readPreference")) || hasReadPrefOption;
+    }
+
     void ConnectionString::_fillServers( string s ) {
         
         //
@@ -152,6 +159,45 @@ namespace mongo {
 
         verify( 0 );
         return 0;
+    }
+
+    bool ConnectionString::sameLogicalEndpoint( const ConnectionString& other ) const {
+        if ( _type != other._type )
+            return false;
+
+        switch ( _type ) {
+        case INVALID:
+            return true;
+        case MASTER:
+            return _servers[0] == other._servers[0];
+        case PAIR:
+            if ( _servers[0] == other._servers[0] )
+                return _servers[1] == other._servers[1];
+            return
+                ( _servers[0] == other._servers[1] ) &&
+                ( _servers[1] == other._servers[0] );
+        case SET:
+            return _setName == other._setName;
+        case SYNC:
+            // The servers all have to be the same in each, but not in the same order.
+            if ( _servers.size() != other._servers.size() )
+                return false;
+            for ( unsigned i = 0; i < _servers.size(); i++ ) {
+                bool found = false;
+                for ( unsigned j = 0; j < other._servers.size(); j++ ) {
+                    if ( _servers[i] == other._servers[j] ) {
+                        found = true;
+                        break;
+                    }
+                }
+                if ( ! found )
+                    return false;
+            }
+            return true;
+        case CUSTOM:
+            return _string == other._string;
+        }
+        verify( false );
     }
 
     ConnectionString ConnectionString::parse( const string& host , string& errmsg ) {
@@ -806,7 +852,8 @@ namespace mongo {
         }
     }
 
-    const uint64_t DBClientBase::INVALID_SOCK_CREATION_TIME = UINT64_C(0xFFFFFFFFFFFFFFFF);
+    const uint64_t DBClientBase::INVALID_SOCK_CREATION_TIME =
+            static_cast<uint64_t>(0xFFFFFFFFFFFFFFFFULL);
 
     auto_ptr<DBClientCursor> DBClientBase::query(const string &ns, Query query, int nToReturn,
             int nToSkip, const BSONObj *fieldsToReturn, int queryOptions , int batchSize ) {

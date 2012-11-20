@@ -80,6 +80,10 @@ namespace mongo {
             return result;
         }
 
+        static T loadRelaxed(volatile const T* value) {
+            return *value;
+        }
+
         static void store(volatile T* dest, T newValue) {
             MemoryBarrier();
             *dest = newValue;
@@ -103,13 +107,13 @@ namespace mongo {
     public:
 
         static T compareAndSwap(volatile T* dest, T expected, T newValue) {
-            return _InterlockedCompareExchange64(reinterpret_cast<volatile LONGLONG*>(dest),
+            return InterlockedCompareExchange64(reinterpret_cast<volatile LONGLONG*>(dest),
                                                 LONGLONG(newValue),
                                                 LONGLONG(expected));
         }
 
         static T swap(volatile T* dest, T newValue) {
-            return _InterlockedExchange64(reinterpret_cast<volatile LONGLONG*>(dest),
+            return InterlockedExchange64(reinterpret_cast<volatile LONGLONG*>(dest),
                                          LONGLONG(newValue));
         }
 
@@ -122,7 +126,7 @@ namespace mongo {
         }
 
         static T fetchAndAdd(volatile T* dest, T increment) {
-            return _InterlockedExchangeAdd64(reinterpret_cast<volatile LONGLONG*>(dest),
+            return InterlockedExchangeAdd64(reinterpret_cast<volatile LONGLONG*>(dest),
                                             LONGLONG(increment));
         }
 

@@ -166,6 +166,11 @@ namespace mongo {
         ReadPreference_Nearest,
     };
 
+    /**
+     * @return true if the query object contains a read preference specification object.
+     */
+    bool hasReadPreference(const BSONObj& queryObj);
+
     class DBClientBase;
 
     /**
@@ -250,6 +255,14 @@ namespace mongo {
         vector<HostAndPort> getServers() const { return _servers; }
         
         ConnectionType type() const { return _type; }
+
+        /**
+         * This returns true if this and other point to the same logical entity.
+         * For single nodes, thats the same address.
+         * For replica sets, thats just the same replica set name.
+         * For pair (deprecated) or sync cluster connections, that's the same hosts in any ordering.
+         */
+        bool sameLogicalEndpoint( const ConnectionString& other ) const;
 
         static ConnectionString parse( const string& url , string& errmsg );
 

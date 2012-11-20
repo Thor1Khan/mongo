@@ -22,7 +22,8 @@
 
 #pragma once
 
-#include "jsobj.h"
+#include "mongo/db/jsobj.h"
+#include "mongo/platform/cstdint.h"
 
 namespace mongo {
 
@@ -48,7 +49,11 @@ namespace mongo {
         enum SentinelValues {
             /* note NullOfs is different. todo clean up.  see refs to NullOfs in code - use is valid but outside DiskLoc context so confusing as-is. */
             NullOfs = -1,
-            MaxFiles=16000 // thus a limit of about 32TB of data per db
+
+            // Caps the number of files that may be allocated in a database, allowing about 32TB of
+            // data per db.  Note that the DiskLoc and DiskLoc56Bit types supports more files than
+            // this value, as does the data storage format.
+            MaxFiles=16000
         };
 
         DiskLoc(int a, int Ofs) : _a(a), ofs(Ofs) { }
@@ -126,6 +131,8 @@ namespace mongo {
             return compare(b) < 0;
         }
 
+        uint64_t asUint64() const { return *reinterpret_cast<const uint64_t*>( this ); }
+
         /**
          * Marks this disk loc for writing
          * @returns a non const reference to this disk loc
@@ -154,7 +161,18 @@ namespace mongo {
     };
 #pragma pack()
 
-    const DiskLoc minDiskLoc(0, 1);
-    const DiskLoc maxDiskLoc(0x7fffffff, 0x7fffffff);
+    inline std::ostream& operator<<( std::ostream &stream, const DiskLoc &loc ) {
+        return stream << loc.toString();
+    }
+
+    // Minimum allowed DiskLoc.  No Record may begin at this location because file and extent
+    // headers must precede Records in a file.
+    const DiskLoc minDiskLoc(0, 0);
+
+    // Maximum allowed DiskLoc.  Note that only three bytes are used to represent the file number
+    // for consistency with the v1 index DiskLoc storage format, which uses only 7 bytes total.
+    // No Record may begin at this location because the minimum size of a Record is larger than one
+    // byte.
+    const DiskLoc maxDiskLoc(0x00ffffff, 0x7fffffff);
 
 } // namespace mongo
