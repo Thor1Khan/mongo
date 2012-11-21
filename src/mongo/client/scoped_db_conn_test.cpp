@@ -91,6 +91,8 @@ namespace mongo {
 }
 
 namespace mongo_test {
+    mongo::DummyMessageHandler dummyHandler;
+
     // TODO: Take this out and make it as a reusable class in a header file. The only
     // thing that is preventing this from happening is the dependency on the inShutdown
     // method to terminate the socket listener thread.
@@ -183,7 +185,7 @@ namespace mongo_test {
             _maxPoolSizePerHost = mongo::PoolForHost::getMaxPerHost();
             _dummyServer = new DummyServer(TARGET_PORT);
 
-            _dummyServer->run(new mongo::DummyMessageHandler);
+            _dummyServer->run(&dummyHandler);
             mongo::DBClientConnection conn;
             mongo::Timer timer;
 
@@ -192,7 +194,7 @@ namespace mongo_test {
                 try {
                     conn.connect(TARGET_HOST);
                     break;
-                } catch (const mongo::ConnectException& e) {
+                } catch (const mongo::ConnectException&) {
                     if (timer.seconds() > 20) {
                         FAIL("Timed out connecting to dummy server");
                     }
@@ -305,7 +307,7 @@ namespace mongo_test {
         try {
             conn2->get()->query("test.user", mongo::Query());
         }
-        catch (const mongo::SocketException& sockExcep) {
+        catch (const mongo::SocketException&) {
         }
 
         mongo::getGlobalFailPointRegistry()->getFailPoint("throwSockExcep")->
@@ -331,7 +333,7 @@ namespace mongo_test {
         try {
             conn3->get()->query("test.user", mongo::Query());
         }
-        catch (const mongo::SocketException& sockExcep) {
+        catch (const mongo::SocketException&) {
         }
 
         mongo::getGlobalFailPointRegistry()->getFailPoint("throwSockExcep")->
@@ -366,7 +368,7 @@ namespace mongo_test {
         try {
             conn2->get()->query("test.user", mongo::Query());
         }
-        catch (const mongo::SocketException& sockExcep) {
+        catch (const mongo::SocketException&) {
         }
 
         mongo::getGlobalFailPointRegistry()->getFailPoint("throwSockExcep")->
