@@ -560,8 +560,8 @@ elif "win32" == os.sys.platform:
 
     env.Append( CPPDEFINES=[ "_UNICODE" ] )
     env.Append( CPPDEFINES=[ "UNICODE" ] )
-    if "T10" in os.environ:
-        winSDKHome = os.environ["T10"]
+    if "WINSDKHOME" in os.environ:
+        winSDKHome = os.environ["WINSDKHOME"]
     else:
         winSDKHome = findVersion( [ "C:/Program Files/Microsoft SDKs/Windows/", "C:/Program Files (x86)/Microsoft SDKs/Windows/" ] ,
                               [ "v7.1", "v7.0A", "v7.0", "v6.1", "v6.0a", "v6.0" ] )
