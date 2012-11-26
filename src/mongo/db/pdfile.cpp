@@ -257,6 +257,9 @@ namespace mongo {
             BSONElement e = options.getField("max");
             if ( e.isNumber() ) {
                 mx = e.numberLong();
+                uassert( 16495,
+                         "max in a capped collection has to be < 2^31 or not set",
+                         NamespaceDetails::validMaxCappedDocs(&mx) );
             }
         }
 
