@@ -29,10 +29,16 @@
 #include "mongo/db/auth/principal_set.h"
 #include "mongo/db/auth/privilege_set.h"
 #include "mongo/db/client.h"
+#include "mongo/db/namespacestring.h"
 #include "mongo/db/security_common.h"
 #include "mongo/util/mongoutils/str.h"
 
 namespace mongo {
+
+    AuthInfo::AuthInfo() {
+        user = "__system";
+    }
+    AuthInfo internalSecurity;
 
     const std::string AuthorizationManager::SERVER_RESOURCE_NAME = "$SERVER";
     const std::string AuthorizationManager::CLUSTER_RESOURCE_NAME = "$CLUSTER";
@@ -251,8 +257,7 @@ namespace mongo {
                                   << principal->getName(),
                           0);
         }
-         // TODO: move internalSecurity into AuthorizationManager
-        if (principal->getName() == "__system") {
+        if (principal->getName() == internalSecurity.user) {
             // Grant full access to internal user
             ActionSet allActions;
             allActions.addAllActions();
@@ -321,10 +326,8 @@ namespace mongo {
             return &specialAdminPrincipal;
         }
 
-        // TODO: If resource is a ns, check against the dbname portion only.
-
         const AcquiredPrivilege* privilege;
-        privilege = _acquiredPrivileges.getPrivilegeForAction(resource, action);
+        privilege = _acquiredPrivileges.getPrivilegeForAction(nsToDatabase(resource), action);
         if (privilege) {
             return privilege->getPrincipal();
         }
