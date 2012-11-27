@@ -285,6 +285,7 @@ env = Environment( BUILD_DIR=variantDir,
                    CLIENT_SCONSTRUCT='#distsrc/client/SConstruct',
                    DIST_ARCHIVE_SUFFIX='.tgz',
                    EXTRAPATH=get_option("extrapath"),
+                   MODULE_BANNERS=[],
                    MODULE_LIBDEPS_MONGOD=[],
                    MODULE_LIBDEPS_MONGOS=[],
                    MODULE_LIBDEPS_MONGOSHELL=[],
@@ -390,12 +391,11 @@ else:
     boostCompiler = "-" + boostCompiler
 
 boostVersion = GetOption( "boostVersion" )
-
 if boostVersion is None:
     boostVersion = "-1_53"
 else:
     boostVersion = "-" + boostVersion
-print ("boostVersion: %s" %boostVersion)
+
 if ( not ( usesm or usev8 or justClientLib) ):
     usev8 = True
     options_topass["usev8"] = True
@@ -786,7 +786,6 @@ env['MONGO_MODULES'] = [m.name for m in mongo_modules]
 
 def doConfigure(myenv):
     conf = Configure(myenv)
-    
 
     if 'CheckCXX' in dir( conf ):
         if  not conf.CheckCXX():
