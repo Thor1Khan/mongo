@@ -24,7 +24,7 @@
 #include "mongo/platform/windows_basic.h"
 #include <intrin.h>
 #pragma intrinsic(_InterlockedCompareExchange64)
-
+#define InterlockedCompareExchange64 _InterlockedCompareExchange64
 
 __inline __int64 _InterlockedExchange64(__int64 volatile * Target,__int64 Value)
 {
@@ -43,9 +43,7 @@ __inline __int64 _InterlockedExchangeAdd64(__int64 volatile * Addend,__int64 Val
     return ret;
 }
 
-#define InterlockedCompareExchange64 _InterlockedCompareExchange64
-#define InterlockedExchangeAdd64 _InterlockedExchangeAdd64
-#define InterlockedExchange64 _InterlockedExchange64
+
 namespace mongo {
 
     /**
@@ -82,10 +80,6 @@ namespace mongo {
             return result;
         }
 
-        static T loadRelaxed(volatile const T* value) {
-            return *value;
-        }
-
         static void store(volatile T* dest, T newValue) {
             MemoryBarrier();
             *dest = newValue;
@@ -109,13 +103,13 @@ namespace mongo {
     public:
 
         static T compareAndSwap(volatile T* dest, T expected, T newValue) {
-            return InterlockedCompareExchange64(reinterpret_cast<volatile LONGLONG*>(dest),
+            return _InterlockedCompareExchange64(reinterpret_cast<volatile LONGLONG*>(dest),
                                                 LONGLONG(newValue),
                                                 LONGLONG(expected));
         }
 
         static T swap(volatile T* dest, T newValue) {
-            return InterlockedExchange64(reinterpret_cast<volatile LONGLONG*>(dest),
+            return _InterlockedExchange64(reinterpret_cast<volatile LONGLONG*>(dest),
                                          LONGLONG(newValue));
         }
 
@@ -128,7 +122,7 @@ namespace mongo {
         }
 
         static T fetchAndAdd(volatile T* dest, T increment) {
-            return InterlockedExchangeAdd64(reinterpret_cast<volatile LONGLONG*>(dest),
+            return _InterlockedExchangeAdd64(reinterpret_cast<volatile LONGLONG*>(dest),
                                             LONGLONG(increment));
         }
 
