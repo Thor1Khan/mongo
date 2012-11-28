@@ -24,7 +24,7 @@
 #include "mongo/platform/windows_basic.h"
 #include <intrin.h>
 #pragma intrinsic(_InterlockedCompareExchange64)
-#define InterlockedCompareExchange64 _InterlockedCompareExchange64
+
 
 __inline __int64 _InterlockedExchange64(__int64 volatile * Target,__int64 Value)
 {
@@ -43,7 +43,9 @@ __inline __int64 _InterlockedExchangeAdd64(__int64 volatile * Addend,__int64 Val
     return ret;
 }
 
-
+#define InterlockedCompareExchange64 _InterlockedCompareExchange64
+#define InterlockedExchangeAdd64 _InterlockedExchangeAdd64
+#define InterlockedExchange64 _InterlockedExchange64
 namespace mongo {
 
     /**
