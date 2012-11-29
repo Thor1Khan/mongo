@@ -22,6 +22,8 @@
 #include "mongo/db/auth/action_type.h"
 #include "mongo/db/auth/authorization_manager.h"
 #include "mongo/db/auth/privilege.h"
+#include "mongo/db/commands/find_and_modify.h"
+#include "mongo/db/commands/mr.h"
 #include "../util/net/message.h"
 #include "../db/dbmessage.h"
 #include "../client/connpool.h"
@@ -803,7 +805,11 @@ namespace mongo {
         class FindAndModifyCmd : public PublicGridCommand {
         public:
             FindAndModifyCmd() : PublicGridCommand("findAndModify", "findandmodify") { }
-            // TODO: implement addRequiredPrivileges
+            virtual void addRequiredPrivileges(const std::string& dbname,
+                                               const BSONObj& cmdObj,
+                                               std::vector<Privilege>* out) {
+                find_and_modify::addPrivilegesRequiredForFindAndModify(dbname, cmdObj, out);
+            }
             bool run(const string& dbName, BSONObj& cmdObj, int, string& errmsg, BSONObjBuilder& result, bool) {
                 string collection = cmdObj.firstElement().valuestrsafe();
                 string fullns = dbName + "." + collection;
@@ -1258,6 +1264,12 @@ namespace mongo {
 
             MRCmd() : PublicGridCommand( "mapreduce" ) {}
 
+            virtual void addRequiredPrivileges(const std::string& dbname,
+                                               const BSONObj& cmdObj,
+                                               std::vector<Privilege>* out) {
+                mr::addPrivilegesRequiredForMapReduce(dbname, cmdObj, out);
+            }
+
             string getTmpName( const string& coll ) {
                 stringstream ss;
                 ss << "tmp.mrs." << coll << "_" << time(0) << "_" << JOB_NUMBER++;
@@ -1299,15 +1311,6 @@ namespace mongo {
                 }
 
                 return b.obj();
-            }
-
-            ChunkPtr insertSharded( ChunkManagerPtr manager, const char* ns, BSONObj& o, int flags, bool safe ) {
-                // note here, the MR output process requires no splitting / migration during process, hence StaleConfigException should not happen
-                Strategy* s = SHARDED;
-                ChunkPtr c = manager->findChunkForDoc( o );
-                LOG(4) << "  server:" << c->getShard().toString() << " " << o << endl;
-                s->insert( c->getShard() , ns , o , flags, safe);
-                return c;
             }
 
             void cleanUp( const set<ServerAndQuery>& servers, string dbName, string shardResultCollection ) {
