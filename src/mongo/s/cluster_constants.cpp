@@ -23,6 +23,7 @@ namespace mongo {
     BSONField<string> ShardFields::host("host");
     BSONField<bool> ShardFields::draining("draining");
     BSONField<long long> ShardFields::maxSize("maxSize");
+    BSONField<BSONArray> ShardFields::tags("tags");
 
     const string ConfigNS::database = "config.databases";
     BSONField<string> DatabaseFields::name("_id");
@@ -66,13 +67,13 @@ namespace mongo {
     BSONField<int> MongosFields::up("up");
     BSONField<bool> MongosFields::waiting("waiting");
 
-    // ============  below not yet hooked  ============
-
     const string ConfigNS::settings = "config.settings";
-    BSONField<int> SettingFields::UNHOOKED_name("_id");
-    BSONField<string> SettingFields::UNHOOKED_value("value");
-
-    // ============  below hooked  ============
+    BSONField<string> SettingsFields::key("_id");
+    BSONField<int> SettingsFields::chunksize("value");
+    BSONField<bool> SettingsFields::balancerStopped("stopped");
+    BSONField<BSONObj> SettingsFields::balancerActiveWindow("activeWindow");
+    BSONField<bool> SettingsFields::shortBalancerSleep("_nosleep");
+    BSONField<bool> SettingsFields::secondaryThrottle("_secondaryThrottle");
 
     const string ConfigNS::changelog = "config.changelog";
     BSONField<string> ChangelogFields::changeID("_id");

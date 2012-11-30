@@ -51,6 +51,7 @@ namespace mongo {
         static BSONField<string> host;       // connection string for the host(s)
         static BSONField<bool> draining;     // is it draining chunks?
         static BSONField<long long> maxSize; // max allowe disk space usage
+        static BSONField<BSONArray> tags;    // shard tags
     };
 
     /**
@@ -132,14 +133,32 @@ namespace mongo {
         static BSONField<bool> waiting;
     };
 
-    // ============  below not yet hooked  ============
-
     /**
-     * SettingFields holds all the field names and types for the settings collection.
+     * SettingsFields holds all the field names and types for the settings collection.
      */
-    struct SettingFields {
-        static BSONField<int> UNHOOKED_name;     // key for the parameter
-        static BSONField<string> UNHOOKED_value; // value for the parameter
+    struct SettingsFields {
+
+        // key determining the type of setting document this is
+        static BSONField<string> key;
+
+        // === chunksize options ===
+
+        static BSONField<int> chunksize;
+
+        // === balancer options ===
+
+        // balancer enabled/disabled
+        static BSONField<bool> balancerStopped;
+
+        // if present, activeWindow is an interval during the day when the balancer should be
+        // active.  Format: { start: "08:00" , stop: "19:30" }, strftime format is %H:%M
+        static BSONField<BSONObj> balancerActiveWindow;
+
+        // controls how long the balancer sleeps in some situations
+        static BSONField<bool> shortBalancerSleep;
+
+        // only migrate chunks as fast as at least one secondary can keep up with
+        static BSONField<bool> secondaryThrottle;
     };
 
     /**
