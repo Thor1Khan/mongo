@@ -107,21 +107,32 @@ namespace mongo {
         }
     }
 
-    NamespaceDetails* getOrCreateProfileCollection(Database *db, bool force) {
+    NamespaceDetails* getOrCreateProfileCollection(Database *db, bool force, string* errmsg ) {
         fassert(16372, db);
         const char* profileName = db->profileName.c_str();
         NamespaceDetails* details = db->namespaceIndex.details(profileName);
         if (!details && (cmdLine.defaultProfile || force)) {
             // system.profile namespace doesn't exist; create it
             log() << "creating profile collection: " << profileName << endl;
-            string errmsg;
+            string myerrmsg;
             if (!userCreateNS(db->profileName.c_str(),
-                              BSON("capped" << true << "size" << 1024 * 1024), errmsg , false)) {
-                log() << "could not create ns " << db->profileName << ": " << errmsg << endl;
+                              BSON("capped" << true << "size" << 1024 * 1024), myerrmsg , false)) {
+                myerrmsg = str::stream() << "could not create ns " << db->profileName << ": " << myerrmsg;
+                log() << myerrmsg << endl;
+                if ( errmsg )
+                    *errmsg = myerrmsg;
                 return NULL;
             }
             details = db->namespaceIndex.details(profileName);
         }
+        else if ( details && !details->isCapped() ) {
+            string myerrmsg = str::stream() << profileName << " exists but isn't capped";
+            log() << myerrmsg << endl;
+            if ( errmsg )
+                *errmsg = myerrmsg;
+            return NULL;
+        }
+
         if (!details) {
             // failed to get or create profile collection
             static time_t last = time(0) - 10;  // warn the first time
