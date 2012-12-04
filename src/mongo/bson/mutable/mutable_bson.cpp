@@ -28,31 +28,9 @@
 namespace mongo {
 namespace mutablebson {
 
-/**
- All these constants are scaffolding that can be torn away as needed.
-*/
-#define SHORTBIT        (1<<16)
-#define DEPTH_LIMIT     50
-#define SHORT_LIMIT     16
-#define __TRACE__ __FILE__ << ":" << __FUNCTION__ << " [" << __LINE__ << "]"
-
-    static const std::string indentv[] = { "    ",
-                                           "        ",
-                                           "            ",
-                                           "                ",
-                                           "                    ",
-                                           "                        ",
-                                           "                            ",
-                                           "                                " };
-
-    // for debugging only:
-    //ElementRep& Element::getElementRep() { return _doc->_elements->_vec[_rep]; }
-    //ElementRep& Element::getElementRep() const { return _doc->_elements->_vec[_rep]; }
-
-    uint32_t Element::getRep() const { return _rep; }
-    void Element::setRep(uint32_t rep) { _rep = rep; }
-    Document* Element::getDocument() const { return _doc; }
-    void Element::setDocument(Document* doc) { _doc = doc; }
+namespace {
+    const int32_t SHORTBIT = (1<<16);
+} // namespace
 
     //
     // Element navigation
@@ -82,18 +60,8 @@ namespace mutablebson {
         return SiblingIterator(leftChild());
     }
 
-    FilterIterator Element::find(const std::string& fieldName) const {
-        FieldNameFilter* filter = new FieldNameFilter(fieldName);
-        return FilterIterator(*this, filter);
-    }
-
-    std::string Element::fieldName() const {
-        return _doc->getString(_doc->_elements->_vec[_rep]._nameref);
-    }
-
-    /** Needs optimization to avoid allocating a string. (aaron) */
-    int Element::fieldNameSize() const {
-        return _doc->getString(_doc->_elements->_vec[_rep]._nameref).size();
+    StringData Element::getFieldName() const {
+        return _doc->getHeap()->getStringBuffer(_doc->_elements->_vec[_rep]._nameref);
     }
 
     //
@@ -243,7 +211,7 @@ namespace mutablebson {
         return Status::OK();
     }
 
-    Status Element::rename(const std::string& newName) {
+    Status Element::rename(const StringData& newName) {
         ElementRep& thisRep = _doc->_elements->_vec[_rep];
         thisRep._nameref = _doc->getHeap()->putString(newName);
         return Status::OK();
@@ -434,7 +402,7 @@ ElementRep& dstRep = _doc->_elements->_vec[(*sibIt)._rep];
             return &_doc->_elements->_vec[_rep]._value.shortStr[0];
         }
         else {
-            return _doc->getStringBuffer(_doc->_elements->_vec[_rep]._value.valueRef);
+            return _doc->getHeap()->getStringBuffer(_doc->_elements->_vec[_rep]._value.valueRef);
         }
     }
 
@@ -505,6 +473,7 @@ ElementRep& dstRep = _doc->_elements->_vec[(*sibIt)._rep];
         ElementRep& e = _doc->_elements->_vec[_rep];
         e._type = mongo::String;
         if (stringVal.size() < SHORT_LIMIT) {
+            // TODO: This probably needs to be memcpy.
             strcpy(e._value.shortStr, stringVal.data());
             e._type |= SHORTBIT;
         }
@@ -528,6 +497,110 @@ ElementRep& dstRep = _doc->_elements->_vec[(*sibIt)._rep];
             break;
         default:
             // Invalid type - e._type was set to EOO above, so we're done
+            break;
+        }
+    }
+
+    void Element::setMinKey() {
+        ElementRep& e = _doc->_elements->_vec[_rep];
+        e._type = mongo::MinKey;
+    }
+
+    void Element::setMaxKey() {
+        ElementRep& e = _doc->_elements->_vec[_rep];
+        e._type = mongo::MinKey;
+    }
+
+    void Element::setUndefined() {
+        ElementRep& e = _doc->_elements->_vec[_rep];
+        e._type = mongo::Undefined;
+    }
+
+    void Element::setNull() {
+        ElementRep& e = _doc->_elements->_vec[_rep];
+        e._type = mongo::jstNULL;
+    }
+
+    void Element::setSymbol(const StringData& symbolVal) {
+        ElementRep& e = _doc->_elements->_vec[_rep];
+        e._type = mongo::Symbol;
+        if (symbolVal.size() < SHORT_LIMIT) {
+            // TODO: This probably should be memcpy
+            strcpy(e._value.shortStr, symbolVal.data());
+            e._type |= SHORTBIT;
+        }
+        else {
+            e._value.valueRef = _doc->_heap->putString(symbolVal);
+        }
+    }
+
+    void Element::setValueFromBSONElement(const BSONElement& val) {
+        switch(val.type()) {
+        case MinKey:
+            setMinKey();
+            break;
+        case EOO:
+            verify(false);
+            break;
+        case NumberDouble:
+            setDoubleValue(val._numberDouble());
+            break;
+        case String:
+            setStringValue(StringData(val.valuestr(), val.valuestrsize()));
+            break;
+        case Object:
+            verify(false);
+            break;
+        case Array:
+            verify(false);
+            break;
+        case BinData:
+            verify(false);
+            break;
+        case Undefined:
+            setUndefined();
+            break;
+        case jstOID:
+            setOIDValue(val.__oid());
+            break;
+        case Bool:
+            setBoolValue(val.boolean());
+            break;
+        case Date:
+            setDateValue(val.date());
+            break;
+        case jstNULL:
+            setNull();
+            break;
+        case RegEx:
+            verify(false);
+            break;
+        case DBRef:
+            verify(false);
+            break;
+        case Code:
+            verify(false);
+            break;
+        case Symbol:
+            setSymbol(StringData(val.valuestr(), val.valuestrsize()));
+            break;
+        case CodeWScope:
+            verify(false);
+            break;
+        case NumberInt:
+            setIntValue(val._numberInt());
+            break;
+        case Timestamp:
+            setTSValue(val._opTime());
+            break;
+        case NumberLong:
+            setLongValue(val._numberLong());
+            break;
+        case MaxKey:
+            setMaxKey();
+            break;
+        default:
+            verify(false);
             break;
         }
     }
@@ -723,107 +796,11 @@ ElementRep& dstRep = _doc->_elements->_vec[(*sibIt)._rep];
     }
 
     //
-    // Element output methods - mainly for debugging
-    //
-
-    std::ostream& Element::putValue(std::ostream& os) const {
-        switch (type()) {
-        case mongo::MinKey: os << "MinKey"; break;
-        case mongo::EOO: os << "EOO"; break;
-        case mongo::NumberDouble: os << getDoubleValue(); break;
-        case mongo::String: os << "\"" << getStringValue() << "\""; break;
-        case mongo::Object: break;
-        case mongo::Array: break;
-        case mongo::BinData: os << "|" << getStringValue() << "|"; break;
-        case mongo::Undefined: os << "Undefined"; break;
-        case mongo::jstOID: os << getOIDValue(); break;
-        case mongo::Bool: os << getBoolValue(); break;
-        case mongo::Date: os << getDateValue(); break;
-        case mongo::jstNULL: os << "jstNULL"; break;
-        case mongo::RegEx: os << "Regex(\"" << getStringValue() << "\")"; break;
-        case mongo::Symbol: os << "Symbol(\"" << getStringValue() << "\")"; break;
-        case mongo::CodeWScope: os << "CodeWithScope(\"" << getStringValue() << "\")"; break;
-        case mongo::NumberInt: os << getIntValue(); break;
-        case mongo::Timestamp : os << getDateValue(); break;
-        case mongo::NumberLong : os << getLongValue(); break;
-        case mongo::MaxKey: os << "MaxKey"; break;
-        default:;
-        }
-        return os;
-    }
-
-    string Element::putType() const {
-        switch (type()) {
-        case mongo::MinKey: return "MinKey";
-        case mongo::EOO: return "EOO";
-        case mongo::NumberDouble: return "NumberDouble";
-        case mongo::String: return (isInlineType() ? "ShortString" : "String");
-        case mongo::Object: return "Object";
-        case mongo::Array: return "Array";
-        case mongo::BinData: return "BinData";
-        case mongo::Undefined: return "Undefined";
-        case mongo::jstOID: return "jstOID";
-        case mongo::Bool: return "Bool";
-        case mongo::Date: return "Date";
-        case mongo::jstNULL: return "jstNULL";
-        case mongo::RegEx: return (isInlineType() ? "ShortRegEx" : "RegEx");
-        case mongo::Symbol: return "Symbol";
-        case mongo::CodeWScope: return "CodeWScope";
-        case mongo::NumberInt: return "NumberInt";
-        case mongo::Timestamp: return "Timestamp";
-        case mongo::NumberLong: return "NumberLong";
-        case mongo::MaxKey: return "MaxKey";
-        default: return "UnknownElementType";
-        }
-    }
-
-    std::ostream& Element::put(std::ostream& os, uint32_t depth) const {
-
-        ElementRep& e = _doc->_elements->_vec[_rep];
-        os <<
-            indentv[depth] << "[type=" << putType() <<
-            ", rep=" << getRep() << ", name=" << fieldName();
-
-        if (isSimpleType()) {
-            putValue(os << ", value=") << std::endl;
-        }
-        else {
-            uint32_t rightChildRep = e._child._right;
-            if (rightChildRep != EMPTY_REP) os << ", rightChildRep=" << rightChildRep;
-            uint32_t leftChildRep = e._child._left;
-            if (leftChildRep != EMPTY_REP) {
-                Element eLeft(_doc, leftChildRep);
-                eLeft.put(os << indentv[depth] << " leftChild=\n", depth+1) << std::endl;
-            }
-        }
-
-        uint32_t rightSiblingRep = e._sibling._right;
-        if (rightSiblingRep != EMPTY_REP) {
-            Element eRight(_doc, rightSiblingRep);
-            eRight.put(os << indentv[depth] << " rightSibling=\n", depth) << std::endl;
-            os << indentv[depth] << ']';
-        }
-        else {
-            os << ']';
-        }
-
-        return os;
-    }
-
-    //
-    // Element operator overloading
-    //
-
-    std::ostream& operator<<(std::ostream& os, const Element& e) {
-        return e.put(os, 0);
-    }
-
-    //
     // Element helper methods
     //
 
     /** check that new element roots a clean subtree, no dangling references */
-    Status Element::checkSubtreeIsClean(Element e) {
+    inline Status Element::checkSubtreeIsClean(Element e) {
         ElementRep& rep = e._doc->_elements->_vec[e._rep];
         if (rep._sibling._left != EMPTY_REP) {
             return Status(ErrorCodes::IllegalOperation, "addChild: dangling left sibling");
@@ -849,19 +826,6 @@ ElementRep& dstRep = _doc->_elements->_vec[(*sibIt)._rep];
     }
 
     Document::~Document() {}
-
-    std::string Document::getString(uint32_t offset) const {
-        return _heap->getString(offset);
-    }
-
-    char* Document::getStringBuffer(uint32_t offset) const {
-        return _heap->getStringBuffer(offset);
-    }
-
-    uint32_t Document::elementVectorSize() const {
-        return _elements->size();
-    }
-
 
     // Document factory methods
 
@@ -1055,82 +1019,10 @@ ElementRep& dstRep = _doc->_elements->_vec[(*sibIt)._rep];
     //
 
     Iterator::Iterator() : _doc(NULL), _theRep(EMPTY_REP) {}
-    Iterator::Iterator(Element e) : _doc(e.getDocument()), _theRep(e.getRep()) {}
-    Iterator::Iterator(const Iterator& it) : _doc(it._doc), _theRep(it._theRep) {}
-
-    uint32_t Iterator::getRep() const { return _theRep; }
-    Document* Iterator::getDocument() const { return _doc; }
-    Element Iterator::operator*() { return Element(_doc, _theRep); }
-    Element Iterator::operator->() { return Element(_doc, _theRep); }
-
-    //
-    // SubtreeIterator
-    //
-
-    SubtreeIterator::SubtreeIterator() : Iterator(), _theDoneBit(true) {}
-
-    SubtreeIterator::SubtreeIterator(Element e) :
-        Iterator(e),
-        _theDoneBit(false || e.getRep() == EMPTY_REP)
-    {}
-
-    SubtreeIterator::SubtreeIterator(const SubtreeIterator& it) :
-        Iterator(it),
-        _theDoneBit(it._theDoneBit)
-    {}
-
-    SubtreeIterator::~SubtreeIterator() {}
-
-    bool SubtreeIterator::advance() {
-        if (_theRep == EMPTY_REP) return true;
-
-        ElementRep& er = _doc->_elements->_vec[_theRep];
-        const Element& e = **this;
-
-        if (!e.isSimpleType()) {
-            if (er._child._left != EMPTY_REP) {
-                _theRep = er._child._left;
-                return false;
-            }
-        }
-        if (er._sibling._right != EMPTY_REP) {
-            _theRep = er._sibling._right;
-            return false;
-        }
-
-        uint32_t count(0);
-        for (_theRep = er._parent; _theRep != EMPTY_REP && count < DEPTH_LIMIT; ++count) {
-            ElementRep& e2 = _doc->_elements->_vec[_theRep];
-            if (e2._sibling._right != EMPTY_REP) {
-                _theRep = e2._sibling._right;
-                return false;
-            }
-            if (e2._parent == EMPTY_REP) break;
-            _theRep = e2._parent;
-        }
-        return true;
-    }
-
-    Iterator& SubtreeIterator::operator++() {
-        _theDoneBit = advance();
-        return *this;
-    }
-
-    bool SubtreeIterator::done() const { return _theDoneBit; }
 
     //
     // SiblingIterator
     //
-
-    SiblingIterator::SiblingIterator() : Iterator() {}
-    SiblingIterator::SiblingIterator(Element e) : Iterator(e) {}
-    SiblingIterator::SiblingIterator(const SiblingIterator& it) : Iterator(it) {}
-    SiblingIterator::~SiblingIterator() { }
-
-    Iterator& SiblingIterator::operator++() {
-        advance();
-        return *this;
-    }
 
     bool SiblingIterator::done() const { return (_theRep == EMPTY_REP); }
 
@@ -1140,46 +1032,6 @@ ElementRep& dstRep = _doc->_elements->_vec[(*sibIt)._rep];
         _theRep = e._sibling._right;
         return (_theRep == EMPTY_REP);
     }
-
-    //
-    // FieldNameFilter
-    //
-
-    FieldNameFilter::FieldNameFilter(const std::string& fieldName) : _fieldName(fieldName) {}
-    FieldNameFilter::~FieldNameFilter() {}
-    bool FieldNameFilter::match(Element e) const { return (_fieldName == e.fieldName()); }
-
-    //
-    // FilterIterator
-    //
-
-    FilterIterator::FilterIterator() : SubtreeIterator(), _filter(NULL) {}
-
-    FilterIterator::FilterIterator(Element e, const Filter* filter) :
-        SubtreeIterator(e),
-        _filter(filter) {
-        operator++();
-    }
-
-    FilterIterator::FilterIterator(const FilterIterator& it) :
-        SubtreeIterator(it),
-        _filter(it._filter)
-    {}
-
-    FilterIterator::~FilterIterator() {}
-
-    Iterator& FilterIterator::operator++() {
-        if (_theDoneBit) return *this;
-        while (true) {
-            _theDoneBit = advance();
-            if (_theDoneBit) break;
-            Element e(_doc, _theRep);
-            if (_filter->match(e)) break;
-        }
-        return *this;
-    }
-
-    bool FilterIterator::done() const { return _theDoneBit; }
 
 } // namespace mutablebson
 } // namespace mongo

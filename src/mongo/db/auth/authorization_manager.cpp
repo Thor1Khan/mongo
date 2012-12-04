@@ -184,6 +184,17 @@ namespace mongo {
         return Status::OK();
     }
 
+    void AuthorizationManager::grantInternalAuthorization(const std::string& principalName) {
+        Principal* principal = new Principal(principalName);
+        ActionSet actions;
+        actions.addAllActions();
+        AcquiredPrivilege privilege(Privilege("*", actions), principal);
+
+        addAuthorizedPrincipal(principal);
+        Status status = acquirePrivilege(privilege);
+        verify(status.isOK());
+    }
+
     ActionSet AuthorizationManager::getActionsForOldStyleUser(const std::string& dbname,
                                                               bool readOnly) {
         ActionSet actions;
@@ -286,6 +297,26 @@ namespace mongo {
             return privilege->getPrincipal();
         }
         privilege = _acquiredPrivileges.getPrivilegeForAction(WILDCARD_DBNAME, action);
+        if (privilege) {
+            return privilege->getPrincipal();
+        }
+
+        return NULL; // Not authorized
+    }
+
+    const Principal* AuthorizationManager::checkAuthorization(const std::string& resource,
+                                                              ActionSet actions) const {
+
+        if (_externalState->shouldIgnoreAuthChecks()) {
+            return &specialAdminPrincipal;
+        }
+
+        const AcquiredPrivilege* privilege;
+        privilege = _acquiredPrivileges.getPrivilegeForActions(nsToDatabase(resource), actions);
+        if (privilege) {
+            return privilege->getPrincipal();
+        }
+        privilege = _acquiredPrivileges.getPrivilegeForActions(WILDCARD_DBNAME, actions);
         if (privilege) {
             return privilege->getPrincipal();
         }

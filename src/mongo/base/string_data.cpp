@@ -13,25 +13,14 @@
  *    limitations under the License.
  */
 
-#include "mongo/db/auth/privilege.h"
+#include "mongo/base/string_data.h"
 
-#include <string>
-
-#include "mongo/db/auth/action_set.h"
-#include "mongo/db/auth/action_type.h"
-#include "mongo/db/auth/principal.h"
+#include <ostream>
 
 namespace mongo {
 
-    Privilege::Privilege(const std::string& resource, ActionSet actions) :
-            _resource(resource), _actions(actions) {}
-
-    bool Privilege::includesAction(const ActionType& action) const {
-        return _actions.contains(action);
-    }
-
-    bool Privilege::includesActions(const ActionSet& actions) const {
-        return _actions.isSupersetOf(actions);
+    std::ostream& operator<<(std::ostream& stream, const StringData& value) {
+        return stream.write(value.data(), value.size());
     }
 
 } // namespace mongo

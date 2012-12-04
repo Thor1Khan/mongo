@@ -19,6 +19,7 @@
 
 #include "mongo/base/status.h"
 #include "mongo/bson/bsonobj.h"
+#include "mongo/bson/mutable/mutable_bson_algo.h"
 #include "mongo/bson/mutable/mutable_bson_builder.h"
 #include "mongo/bson/mutable/mutable_bson_heap.h"
 #include "mongo/bson/mutable/mutable_bson_internal.h"
@@ -26,9 +27,6 @@
 #include "mongo/unittest/unittest.h"
 
 namespace {
-
-#define EMPTY_REP  ((uint32_t)-1)
-#define __TRACE__ __FILE__ << ":" << __FUNCTION__ << " [" << __LINE__ << "]"
 
     TEST(TopologyBuilding, TopDownFromScratch) {
         /*
@@ -60,23 +58,23 @@ namespace {
         ASSERT_EQUALS(e3.addChild(e4), mongo::Status::OK());
         ASSERT_EQUALS(e3.addChild(e5), mongo::Status::OK());
 
-        ASSERT_EQUALS("e0", e0.fieldName());
-        ASSERT_EQUALS("e1", e0.leftChild().fieldName());
-        ASSERT_EQUALS("e2", e0.rightChild().fieldName());
-        ASSERT_EQUALS("e0", e1.parent().fieldName());
-        ASSERT_EQUALS("e0", e2.parent().fieldName());
-        ASSERT_EQUALS("e2", e1.rightSibling().fieldName());
-        ASSERT_EQUALS("e1", e2.leftSibling().fieldName());
-        ASSERT_EQUALS("e3", e2.leftChild().fieldName());
-        ASSERT_EQUALS("e3", e2.rightChild().fieldName());
+        ASSERT_EQUALS("e0", e0.getFieldName());
+        ASSERT_EQUALS("e1", e0.leftChild().getFieldName());
+        ASSERT_EQUALS("e2", e0.rightChild().getFieldName());
+        ASSERT_EQUALS("e0", e1.parent().getFieldName());
+        ASSERT_EQUALS("e0", e2.parent().getFieldName());
+        ASSERT_EQUALS("e2", e1.rightSibling().getFieldName());
+        ASSERT_EQUALS("e1", e2.leftSibling().getFieldName());
+        ASSERT_EQUALS("e3", e2.leftChild().getFieldName());
+        ASSERT_EQUALS("e3", e2.rightChild().getFieldName());
 
-        ASSERT_EQUALS("e2", e3.parent().fieldName());
-        ASSERT_EQUALS("e4", e3.leftChild().fieldName());
-        ASSERT_EQUALS("e5", e3.rightChild().fieldName());
-        ASSERT_EQUALS("e4", e5.leftSibling().fieldName());
-        ASSERT_EQUALS("e5", e4.rightSibling().fieldName());
-        ASSERT_EQUALS("e3", e4.parent().fieldName());
-        ASSERT_EQUALS("e3", e5.parent().fieldName());
+        ASSERT_EQUALS("e2", e3.parent().getFieldName());
+        ASSERT_EQUALS("e4", e3.leftChild().getFieldName());
+        ASSERT_EQUALS("e5", e3.rightChild().getFieldName());
+        ASSERT_EQUALS("e4", e5.leftSibling().getFieldName());
+        ASSERT_EQUALS("e5", e4.rightSibling().getFieldName());
+        ASSERT_EQUALS("e3", e4.parent().getFieldName());
+        ASSERT_EQUALS("e3", e5.parent().getFieldName());
     }
 
     TEST(TopologyBuilding, AddSiblingAfter) {
@@ -104,11 +102,11 @@ namespace {
         ASSERT_EQUALS(e2.addChild(e3), mongo::Status::OK());
         ASSERT_EQUALS(e3.addSiblingAfter(e4), mongo::Status::OK());
 
-        ASSERT_EQUALS("e4", e3.rightSibling().fieldName());
-        ASSERT_EQUALS("e3", e4.leftSibling().fieldName());
-        ASSERT_EQUALS("e2", e4.parent().fieldName());
-        ASSERT_EQUALS("e3", e2.leftChild().fieldName());
-        ASSERT_EQUALS("e4", e2.rightChild().fieldName());
+        ASSERT_EQUALS("e4", e3.rightSibling().getFieldName());
+        ASSERT_EQUALS("e3", e4.leftSibling().getFieldName());
+        ASSERT_EQUALS("e2", e4.parent().getFieldName());
+        ASSERT_EQUALS("e3", e2.leftChild().getFieldName());
+        ASSERT_EQUALS("e4", e2.rightChild().getFieldName());
     }
 
     TEST(TopologyBuilding, AddSiblingBefore) {
@@ -138,16 +136,16 @@ namespace {
         ASSERT_EQUALS(e5.addSiblingAfter(e6), mongo::Status::OK());
         ASSERT_EQUALS(e5.addSiblingBefore(e7), mongo::Status::OK());
 
-        ASSERT_EQUALS("e5", e7.rightSibling().fieldName());
-        ASSERT_EQUALS("e7", e5.leftSibling().fieldName());
-        ASSERT_EQUALS("e6", e5.rightSibling().fieldName());
-        ASSERT_EQUALS("e5", e6.leftSibling().fieldName());
+        ASSERT_EQUALS("e5", e7.rightSibling().getFieldName());
+        ASSERT_EQUALS("e7", e5.leftSibling().getFieldName());
+        ASSERT_EQUALS("e6", e5.rightSibling().getFieldName());
+        ASSERT_EQUALS("e5", e6.leftSibling().getFieldName());
 
-        ASSERT_EQUALS("e3", e5.parent().fieldName());
-        ASSERT_EQUALS("e3", e6.parent().fieldName());
-        ASSERT_EQUALS("e3", e7.parent().fieldName());
-        ASSERT_EQUALS("e7", e3.leftChild().fieldName());
-        ASSERT_EQUALS("e6", e3.rightChild().fieldName());
+        ASSERT_EQUALS("e3", e5.parent().getFieldName());
+        ASSERT_EQUALS("e3", e6.parent().getFieldName());
+        ASSERT_EQUALS("e3", e7.parent().getFieldName());
+        ASSERT_EQUALS("e7", e3.leftChild().getFieldName());
+        ASSERT_EQUALS("e6", e3.rightChild().getFieldName());
     }
 
     TEST(TopologyBuilding, AddSubtreeBottomUp) {
@@ -181,15 +179,15 @@ namespace {
         ASSERT_EQUALS(e8.addChild(e10), mongo::Status::OK());
         ASSERT_EQUALS(e5.addChild(e8), mongo::Status::OK());
 
-        ASSERT_EQUALS("e8", e9.parent().fieldName());
-        ASSERT_EQUALS("e8", e10.parent().fieldName());
-        ASSERT_EQUALS("e9", e8.leftChild().fieldName());
-        ASSERT_EQUALS("e10", e8.rightChild().fieldName());
-        ASSERT_EQUALS("e9", e10.leftSibling().fieldName());
-        ASSERT_EQUALS("e10", e9.rightSibling().fieldName());
-        ASSERT_EQUALS("e5", e8.parent().fieldName());
-        ASSERT_EQUALS("e8", e5.leftChild().fieldName());
-        ASSERT_EQUALS("e8", e5.rightChild().fieldName());
+        ASSERT_EQUALS("e8", e9.parent().getFieldName());
+        ASSERT_EQUALS("e8", e10.parent().getFieldName());
+        ASSERT_EQUALS("e9", e8.leftChild().getFieldName());
+        ASSERT_EQUALS("e10", e8.rightChild().getFieldName());
+        ASSERT_EQUALS("e9", e10.leftSibling().getFieldName());
+        ASSERT_EQUALS("e10", e9.rightSibling().getFieldName());
+        ASSERT_EQUALS("e5", e8.parent().getFieldName());
+        ASSERT_EQUALS("e8", e5.leftChild().getFieldName());
+        ASSERT_EQUALS("e8", e5.rightChild().getFieldName());
     }
 
     TEST(TopologyBuilding, RemoveLeafNode) {
@@ -210,8 +208,8 @@ namespace {
         ASSERT_EQUALS(e0.addChild(e2), mongo::Status::OK());
         ASSERT_EQUALS(e1.remove(), mongo::Status::OK());
 
-        ASSERT_EQUALS("e2", e0.leftChild().fieldName());
-        ASSERT_EQUALS("e2", e0.rightChild().fieldName());
+        ASSERT_EQUALS("e2", e0.leftChild().getFieldName());
+        ASSERT_EQUALS("e2", e0.rightChild().getFieldName());
     }
 
     TEST(TopologyBuilding, RemoveSubtree) {
@@ -247,10 +245,10 @@ namespace {
         ASSERT_EQUALS(e5.addChild(e8), mongo::Status::OK());
         ASSERT_EQUALS(e5.remove(), mongo::Status::OK());
 
-        ASSERT_EQUALS("e3", e4.parent().fieldName());
-        ASSERT_EQUALS("e3", e6.parent().fieldName());
-        ASSERT_EQUALS("e4", e3.leftChild().fieldName());
-        ASSERT_EQUALS("e6", e3.rightChild().fieldName());
+        ASSERT_EQUALS("e3", e4.parent().getFieldName());
+        ASSERT_EQUALS("e3", e6.parent().getFieldName());
+        ASSERT_EQUALS("e4", e3.leftChild().getFieldName());
+        ASSERT_EQUALS("e6", e3.rightChild().getFieldName());
     }
 
     TEST(TopologyBuilding, RenameNode) {
@@ -273,7 +271,7 @@ namespace {
         ASSERT_EQUALS(e0.addChild(e2), mongo::Status::OK());
         ASSERT_EQUALS(e0.rename("f0"), mongo::Status::OK());
 
-        ASSERT_EQUALS("f0", e0.fieldName());
+        ASSERT_EQUALS("f0", e0.getFieldName());
     }
 
     TEST(TopologyBuilding, MoveNode) {
@@ -306,129 +304,29 @@ namespace {
         ASSERT_EQUALS(e3.addChild(e4), mongo::Status::OK());
         ASSERT_EQUALS(e3.addChild(e5), mongo::Status::OK());
 
-        ASSERT_EQUALS("e0", e0.fieldName());
-        ASSERT_EQUALS("e1", e0.leftChild().fieldName());
-        ASSERT_EQUALS("e2", e0.rightChild().fieldName());
-        ASSERT_EQUALS("e0", e1.parent().fieldName());
-        ASSERT_EQUALS("e0", e2.parent().fieldName());
-        ASSERT_EQUALS("e2", e1.rightSibling().fieldName());
-        ASSERT_EQUALS("e1", e2.leftSibling().fieldName());
-        ASSERT_EQUALS("e3", e2.leftChild().fieldName());
-        ASSERT_EQUALS("e3", e2.rightChild().fieldName());
-        ASSERT_EQUALS("e4", e3.leftChild().fieldName());
-        ASSERT_EQUALS("e5", e3.rightChild().fieldName());
-        ASSERT_EQUALS("e5", e4.rightSibling().fieldName());
-        ASSERT_EQUALS("e4", e5.leftSibling().fieldName());
+        ASSERT_EQUALS("e0", e0.getFieldName());
+        ASSERT_EQUALS("e1", e0.leftChild().getFieldName());
+        ASSERT_EQUALS("e2", e0.rightChild().getFieldName());
+        ASSERT_EQUALS("e0", e1.parent().getFieldName());
+        ASSERT_EQUALS("e0", e2.parent().getFieldName());
+        ASSERT_EQUALS("e2", e1.rightSibling().getFieldName());
+        ASSERT_EQUALS("e1", e2.leftSibling().getFieldName());
+        ASSERT_EQUALS("e3", e2.leftChild().getFieldName());
+        ASSERT_EQUALS("e3", e2.rightChild().getFieldName());
+        ASSERT_EQUALS("e4", e3.leftChild().getFieldName());
+        ASSERT_EQUALS("e5", e3.rightChild().getFieldName());
+        ASSERT_EQUALS("e5", e4.rightSibling().getFieldName());
+        ASSERT_EQUALS("e4", e5.leftSibling().getFieldName());
         ASSERT_EQUALS(e3.move(e0), mongo::Status::OK());
 
-        ASSERT_EQUALS("e0", e3.parent().fieldName());
-        ASSERT_EQUALS("e1", e0.leftChild().fieldName());
-        ASSERT_EQUALS("e3", e0.rightChild().fieldName());
-        ASSERT_EQUALS("e3", e2.rightSibling().fieldName());
-        ASSERT_EQUALS("e2", e3.leftSibling().fieldName());
-        ASSERT_EQUALS("e4", e3.leftChild().fieldName());
-        ASSERT_EQUALS("e5", e3.rightChild().fieldName());
+        ASSERT_EQUALS("e0", e3.parent().getFieldName());
+        ASSERT_EQUALS("e1", e0.leftChild().getFieldName());
+        ASSERT_EQUALS("e3", e0.rightChild().getFieldName());
+        ASSERT_EQUALS("e3", e2.rightSibling().getFieldName());
+        ASSERT_EQUALS("e2", e3.leftSibling().getFieldName());
+        ASSERT_EQUALS("e4", e3.leftChild().getFieldName());
+        ASSERT_EQUALS("e5", e3.rightChild().getFieldName());
     }
-
-
-    TEST(Iterators, SubtreeIterator) {
-        /* 
-                           [ e0 ]
-                            /   \
-                           /     \
-                       [ e1 ]..[ e2 ]
-                                /
-                               /
-                           [ e3 ]
-                            /   \
-                           /     \
-                       [ e4 ]..[ e5 ]
-        */
-
-        mongo::mutablebson::BasicHeap myHeap;
-        mongo::mutablebson::Document doc(&myHeap);
-
-        mongo::mutablebson::Element e0 = doc.makeObjElement("e0");
-        mongo::mutablebson::Element e1 = doc.makeObjElement("e1");
-        mongo::mutablebson::Element e2 = doc.makeObjElement("e2");
-        mongo::mutablebson::Element e3 = doc.makeObjElement("e3");
-        mongo::mutablebson::Element e4 = doc.makeObjElement("e4");
-        mongo::mutablebson::Element e5 = doc.makeObjElement("e5");
-
-        ASSERT_EQUALS(e0.addChild(e1), mongo::Status::OK());
-        ASSERT_EQUALS(e0.addChild(e2), mongo::Status::OK());
-        ASSERT_EQUALS(e2.addChild(e3), mongo::Status::OK());
-        ASSERT_EQUALS(e3.addChild(e4), mongo::Status::OK());
-        ASSERT_EQUALS(e3.addChild(e5), mongo::Status::OK());
-
-        mongo::mutablebson::SubtreeIterator it(e0);
-
-        ASSERT_EQUALS(it.done(), false);
-        ASSERT_EQUALS("e0", mongo::mutablebson::Element(&doc, it.getRep()).fieldName());
-        ASSERT_EQUALS((++it).done(), false);
-        ASSERT_EQUALS("e1", mongo::mutablebson::Element(&doc, it.getRep()).fieldName());
-        ASSERT_EQUALS((++it).done(), false);
-        ASSERT_EQUALS("e2", mongo::mutablebson::Element(&doc, it.getRep()).fieldName());
-        ASSERT_EQUALS((++it).done(), false);
-        ASSERT_EQUALS("e3", mongo::mutablebson::Element(&doc, it.getRep()).fieldName());
-        ASSERT_EQUALS((++it).done(), false);
-        ASSERT_EQUALS("e4", mongo::mutablebson::Element(&doc, it.getRep()).fieldName());
-        ASSERT_EQUALS((++it).done(), false);
-        ASSERT_EQUALS("e5", mongo::mutablebson::Element(&doc, it.getRep()).fieldName());
-        ASSERT_EQUALS((++it).done(), true);
-    }
-
-    TEST(Iterators, FieldnameIterator) {
-        /* 
-                           [ e0 ]
-                            /   \
-                           /     \
-                       [ e1 ]..[ e2 ]
-                        /       /
-                       /       /
-                   [ e6 ]  [ e3 ]
-                            /   \
-                           /     \
-                       [ e4 ]..[ e5 ]
-        */
-
-        mongo::mutablebson::BasicHeap myHeap;
-        mongo::mutablebson::Document doc(&myHeap);
-
-        mongo::mutablebson::Element e0 = doc.makeObjElement("e0");
-        mongo::mutablebson::Element e1 = doc.makeObjElement("e1");
-        mongo::mutablebson::Element e2 = doc.makeObjElement("e2");
-        mongo::mutablebson::Element e3 = doc.makeObjElement("e3");
-        mongo::mutablebson::Element e4 = doc.makeObjElement("e4");
-        mongo::mutablebson::Element e5 = doc.makeObjElement("e5");
-        mongo::mutablebson::Element e6 = doc.makeObjElement("e3");
-
-        ASSERT_EQUALS(e0.addChild(e1), mongo::Status::OK());
-        ASSERT_EQUALS(e0.addChild(e2), mongo::Status::OK());
-        ASSERT_EQUALS(e2.addChild(e3), mongo::Status::OK());
-        ASSERT_EQUALS(e3.addChild(e4), mongo::Status::OK());
-        ASSERT_EQUALS(e3.addChild(e5), mongo::Status::OK());
-        ASSERT_EQUALS(e1.addChild(e6), mongo::Status::OK());
-
-        mongo::mutablebson::FieldNameFilter filter("e3");
-
-        ASSERT_EQUALS(filter.match(e0), false);
-        ASSERT_EQUALS(filter.match(e1), false);
-        ASSERT_EQUALS(filter.match(e2), false);
-        ASSERT_EQUALS(filter.match(e3), true);
-        ASSERT_EQUALS(filter.match(e4), false);
-        ASSERT_EQUALS(filter.match(e5), false);
-        ASSERT_EQUALS(filter.match(e6), true);
-
-        mongo::mutablebson::FilterIterator it(e0, &filter);
-
-        ASSERT_EQUALS(it.done(), false);
-        ASSERT_EQUALS("e3", mongo::mutablebson::Element(&doc, it.getRep()).fieldName());
-        ASSERT_EQUALS((++it).done(), false);
-        ASSERT_EQUALS("e3", mongo::mutablebson::Element(&doc, it.getRep()).fieldName());
-        ASSERT_EQUALS((++it).done(), true);
-    }
-
 
     TEST(ArrayAPI, SimpleNumericArray) {
         /*
@@ -473,7 +371,7 @@ namespace {
         ASSERT_EQUALS(e1.arraySize(&n), mongo::Status::OK());
         ASSERT_EQUALS(6, (int)n);
 
-        mongo::mutablebson::Element e(&doc, EMPTY_REP);
+        mongo::mutablebson::Element e(&doc, mongo::mutablebson::EMPTY_REP);
         ASSERT_EQUALS(e1.get(0, &e), mongo::Status::OK());
         ASSERT_EQUALS(0, e.getIntValue());
         ASSERT_EQUALS(e1.get(1, &e), mongo::Status::OK());
@@ -554,45 +452,6 @@ namespace {
         ASSERT_EQUALS(100, e.getIntValue());
     }
 
-
-    TEST(Lookup, ByName) {
-        /*
-                       [ e0 ]
-                        /   \
-                       /     \
-                   [ e1 ]..[ e2 ]
-                     /
-                    /
-                 [ e2 ]
-        */
-
-        mongo::mutablebson::BasicHeap myHeap;
-        mongo::mutablebson::Document doc(&myHeap);
-
-        mongo::mutablebson::Element e0 = doc.makeObjElement("e0");
-        mongo::mutablebson::Element e1 = doc.makeObjElement("e1");
-        mongo::mutablebson::Element e0e2 = doc.makeObjElement("e2");
-        mongo::mutablebson::Element e1e2 = doc.makeObjElement("e2");
-
-        ASSERT_EQUALS(e0.addChild(e1), mongo::Status::OK());
-        ASSERT_EQUALS(e0.addChild(e0e2), mongo::Status::OK());
-        ASSERT_EQUALS(e1.addChild(e1e2), mongo::Status::OK());
-
-        ASSERT_EQUALS("e0", e0e2.parent().fieldName());
-        ASSERT_EQUALS("e1", e1e2.parent().fieldName());
-
-        mongo::mutablebson::FilterIterator it = e0.find("e2");
-        ASSERT_EQUALS(it.done(), false);
-        ASSERT_EQUALS("e2", mongo::mutablebson::Element(&doc, it.getRep()).fieldName());
-        ASSERT_EQUALS("e1", mongo::mutablebson::Element(&doc, it.getRep()).parent().fieldName());
-
-        ASSERT_EQUALS((++it).done(), false);
-        ASSERT_EQUALS("e2", mongo::mutablebson::Element(&doc, it.getRep()).fieldName());
-        ASSERT_EQUALS("e0", mongo::mutablebson::Element(&doc, it.getRep()).parent().fieldName());
-
-        ASSERT_EQUALS((++it).done(), true);
-    }
-
     TEST(Element, setters) {
         mongo::mutablebson::BasicHeap myHeap;
         mongo::mutablebson::Document doc(&myHeap);
@@ -665,7 +524,8 @@ namespace {
         mongo::mutablebson::Element t0 = doc.makeObjElement("e0");
         t0.appendTS("a timestamp field", mongo::OpTime(1352151971, 471));
 
-        mongo::mutablebson::FilterIterator it = t0.find("a timestamp field");
+        mongo::mutablebson::SiblingIterator it =
+            mongo::mutablebson::findFirstChildNamed(t0, "a timestamp field");
         ASSERT_EQUALS(it.done(), false);
         ASSERT(mongo::OpTime(1352151971, 471) ==
             mongo::mutablebson::Element(&doc, it.getRep()).getTSValue());
@@ -727,7 +587,7 @@ namespace {
         mongo::mutablebson::Element t0 = doc.makeObjElement("e0");
         t0.appendSafeNum("a timestamp field", mongo::SafeNum(1352151971LL));
 
-        mongo::mutablebson::FilterIterator it = t0.find("a timestamp field");
+        mongo::mutablebson::SiblingIterator it = findFirstChildNamed(t0, "a timestamp field");
         ASSERT_EQUALS(it.done(), false);
         ASSERT_EQUALS(mongo::SafeNum(1352151971LL),
             mongo::mutablebson::Element(&doc, it.getRep()).getSafeNumValue());
@@ -739,7 +599,7 @@ namespace {
         mongo::mutablebson::Element t0 = doc.makeObjElement("e0");
         const mongo::OID generated = mongo::OID::gen();
         t0.appendOID("myOid", generated);
-        mongo::mutablebson::FilterIterator it = t0.find("myOid");
+        mongo::mutablebson::SiblingIterator it = findFirstChildNamed(t0, "myOid");
         const mongo::OID recovered = mongo::OID((*it).getOIDValue());
         ASSERT_EQUALS(generated, recovered);
     }
@@ -750,7 +610,7 @@ namespace {
         mongo::mutablebson::Element t0 = doc.makeObjElement("e0");
         const mongo::OID withNull("50a9c82263e413ad0028faad");
         t0.appendOID("myOid", withNull);
-        mongo::mutablebson::FilterIterator it = t0.find("myOid");
+        mongo::mutablebson::SiblingIterator it = findFirstChildNamed(t0, "myOid");
         const mongo::OID recovered = mongo::OID((*it).getOIDValue());
         ASSERT_EQUALS(withNull, recovered);
     }

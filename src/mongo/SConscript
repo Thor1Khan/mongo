@@ -75,6 +75,9 @@ env.CppUnitTest('mutable_bson_heap_test', ['bson/mutable/mutable_bson_heap_test.
 env.CppUnitTest('mutable_bson_builder_test', ['bson/mutable/mutable_bson_builder_test.cpp'],
                 LIBDEPS=['bson'])
 
+env.CppUnitTest('mutable_bson_algo_test', ['bson/mutable/mutable_bson_algo_test.cpp'],
+                LIBDEPS=['bson'])
+
 env.CppUnitTest('safe_num_test', ['util/safe_num_test.cpp'],
                 LIBDEPS=['bson'])
 
@@ -417,6 +420,7 @@ serverOnlyFiles += mmapFiles
 serverOnlyFiles += [ "db/stats/snapshots.cpp" ]
 
 env.Library( "coreshard", [ "client/distlock.cpp",
+                            "s/balancer_lock.cpp",
                             "s/config.cpp",
                             "s/grid.cpp",
                             "s/chunk.cpp",

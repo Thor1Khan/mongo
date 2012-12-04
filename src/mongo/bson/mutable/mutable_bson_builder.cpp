@@ -22,8 +22,6 @@
 #include "mongo/base/error_codes.h"
 #include "mongo/base/status.h"
 
-#define __TRACE__  __FILE__ << ":" << __FUNCTION__ << " [" << __LINE__ << "]"
-
 namespace mongo {
 namespace mutablebson {
 
@@ -31,7 +29,7 @@ namespace mutablebson {
     // ElementBuilder
     //
 
-    Status ElementBuilder::parse(Element* dst, const BSONObj& src) {
+    Status ElementBuilder::parse(const BSONObj& src, Element* dst) {
         Status result(Status::OK());
         Document& doc = *dst->getDocument();
 
@@ -57,14 +55,14 @@ namespace mutablebson {
             }
             case Object: {
                 Element e0 = doc.makeObjElement(fieldName);
-                result = ElementBuilder::parse(&e0, bsonElem.Obj());
+                result = ElementBuilder::parse(bsonElem.Obj(), &e0);
                 if (result.isOK())
                     result = dst->addChild(e0);
                 break;
             }
             case Array: {
                 Element e0 = doc.makeArrayElement(fieldName);
-                result = ElementBuilder::parse(&e0, bsonElem.Obj());
+                result = ElementBuilder::parse(bsonElem.Obj(), &e0);
                 if (result.isOK())
                     result = dst->addChild(e0);
                 break;
@@ -148,29 +146,33 @@ namespace mutablebson {
     //
 
     void BSONBuilder::buildFromElement(Element src, BSONObjBuilder* dst) {
+
+        const StringData srcFieldName = src.getFieldName();
+
         switch (src.type()) {
         case MinKey: {
-            dst->appendMinKey(src.fieldName());
+            dst->appendMinKey(srcFieldName);
             break;
         }
         case EOO: {
             break;
         }
         case NumberDouble: {
-            dst->appendNumber(src.fieldName(), src.getDoubleValue());
+            dst->appendNumber(srcFieldName, src.getDoubleValue());
             break;
         }
         case String: {
-            dst->append(src.fieldName(), src.getStringValue());
+            dst->append(srcFieldName, src.getStringValue());
             break;
         }
         case Object: {
-            BSONObjBuilder subBuilder(dst->subobjStart(src.fieldName()));
+            BSONObjBuilder subBuilder(dst->subobjStart(srcFieldName));
             BSONBuilder::build(src, &subBuilder);
+            subBuilder.doneFast();
             break;
         }
         case Array: {
-            BSONObjBuilder subBuilder(dst->subarrayStart(src.fieldName()));
+            BSONObjBuilder subBuilder(dst->subarrayStart(srcFieldName));
             SiblingIterator arrayIt = src.children();
             for (uint32_t n=0; !arrayIt.done(); ++arrayIt,++n) {
                 Element e0 = *arrayIt;
@@ -178,88 +180,83 @@ namespace mutablebson {
                 e0.rename(oss.str());
                 BSONBuilder::buildFromElement(e0, &subBuilder);
             }
+            subBuilder.doneFast();
             break;
         }
         case BinData: {
             uint32_t len(0);
             BinDataType subType(mongo::BinDataGeneral);
-            dst->appendBinData(src.fieldName(), len, subType, src.getStringValue());
+            dst->appendBinData(srcFieldName, len, subType, src.getStringValue());
             break;
         }
         case Undefined: {
-            dst->appendUndefined(src.fieldName());
+            dst->appendUndefined(srcFieldName);
             break;
         }
         case jstOID: {
             OID oid = src.getOIDValue();
-            dst->appendOID(src.fieldName(), &oid);
+            dst->appendOID(srcFieldName, &oid);
             break;
         }
         case Bool: {
-            dst->appendBool(src.fieldName(), src.getBoolValue());
+            dst->appendBool(srcFieldName, src.getBoolValue());
             break;
         }
         case Date: {
-            dst->appendDate(src.fieldName(), src.getDateValue());
+            dst->appendDate(srcFieldName, src.getDateValue());
             break;
         }
         case jstNULL: {
-            dst->appendNull(src.fieldName());
+            dst->appendNull(srcFieldName);
             break;
         }
         case RegEx: {
             string re("");
             Status err = src.regex(&re);
             if (err.code() != ErrorCodes::OK) {
-                std::cout << __TRACE__ << " : [Debug] bad regex : " << src << std:: endl;
                 break;
             }
             string flags("");
             err = src.regexFlags(&flags);
             if (err.code() != ErrorCodes::OK) {
-                std::cout << __TRACE__ << " : [Debug] bad regex flags : " << src << std:: endl;
                 break;
             }
-            dst->appendRegex(src.fieldName(), re, flags);
+            dst->appendRegex(srcFieldName, re, flags);
             break;
         }
         case DBRef: {
             string ns("");
             Status err = src.dbrefNS(&ns);
             if (err.code() != ErrorCodes::OK) {
-                std::cout << __TRACE__ << " : [Debug] bad dbref ns: " << src << std:: endl;
                 break;
             }
             string oidStr("");
             err = src.dbrefOID(&oidStr);
             if (err.code() != ErrorCodes::OK) {
-                std::cout << __TRACE__ << " : [Debug] bad dbref oid: " << src << std:: endl;
                 break;
             }
             mongo::OID oid(oidStr);
-            dst->appendDBRef(src.fieldName(), ns, oid);
+            dst->appendDBRef(srcFieldName, ns, oid);
             break;
         }
 
         case Code: {
-            dst->appendCode(src.fieldName(), src.getStringValue());
+            dst->appendCode(srcFieldName, src.getStringValue());
             break;
         }
         case Symbol: {
-            dst->appendSymbol(src.fieldName(), src.getStringValue());
+            dst->appendSymbol(srcFieldName, src.getStringValue());
             break;
         }
         case CodeWScope: {
             string code("");
             Status err = src.codeWScopeCode(&code);
             if (err.code() != ErrorCodes::OK) {
-                std::cout << __TRACE__ << " : [Debug] bad codeWScope code : " << src << std:: endl;
                 break;
             }
             string scope("");
             err = src.codeWScopeScope(&scope);
             if (err.code() != ErrorCodes::OK) {
-                std::cout << __TRACE__ << " : [Debug] bad codeWScope scope: " << src << std:: endl;
                 break;
             }
             dst->appendCode(code, scope);
@@ -267,19 +264,19 @@ namespace mutablebson {
         }
 
         case NumberInt: {
-            dst->appendNumber(src.fieldName(), src.getIntValue());
+            dst->appendNumber(srcFieldName, src.getIntValue());
             break;
         }
         case Timestamp: {
-            dst->appendTimeT(src.fieldName(), src.getLongValue());
+            dst->appendTimeT(srcFieldName, src.getLongValue());
             break;
         }
         case NumberLong: {
-            dst->appendNumber(src.fieldName(), static_cast<long long>(src.getLongValue()));
+            dst->appendNumber(srcFieldName, static_cast<long long>(src.getLongValue()));
             break;
         }
         case MaxKey: {
-            dst->appendMaxKey(src.fieldName());
+            dst->appendMaxKey(srcFieldName);
             break;
         }
         default: {
@@ -289,7 +286,7 @@ namespace mutablebson {
 
     void BSONBuilder::build(Element src, BSONObjBuilder* dst) {
 
-        SiblingIterator it(src);
+        SiblingIterator it = src.children();
 
         for (; !it.done(); ++it) {
             Element elem = *it;

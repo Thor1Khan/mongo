@@ -29,7 +29,6 @@ namespace mutablebson {
 
     class Document;
     class ElementVector;
-    class FilterIterator;
     class Heap;
     class SiblingIterator;
     struct ElementRep;
@@ -57,17 +56,8 @@ namespace mutablebson {
      *     e0.addChild(e1);
      *     // Document is: { e0 : { e1 : {} } }
      *
-     *     // traversal
-     *     mutablebson::SubtreeIterator it(&doc, e0);
-     *     while (!it.done()) {
-     *         cout << mutablebson::Element(&doc, it.getRep()).fieldName()) << endl;
-     *     }
+     * TODO: Add iteration and search examples
      *
-     *     // look up
-     *     mutablebson::FilterIterator it = e0.find("e1");
-     *     if (!it.done()) {
-     *         cout << mongo::mutablebson::Element(&doc, it.getRep()).fieldName( ) << endl;
-     *     }
      */
     class Element {
     public:
@@ -87,9 +77,6 @@ namespace mutablebson {
         Element rightSibling() const;
         Element parent() const;
 
-        /** Find subtree nodes with a given name */
-        FilterIterator find(const std::string& fieldName) const;
-
         /** Iterate children of this node */
         SiblingIterator children();
 
@@ -101,7 +88,7 @@ namespace mutablebson {
         Status addSiblingBefore(Element e);
         Status addSiblingAfter(Element e);
         Status remove();
-        Status rename(const std::string& newName);
+        Status rename(const StringData& newName);
         Status move(Element newParent);
 
         //
@@ -157,6 +144,17 @@ namespace mutablebson {
         void setStringValue(const StringData& stringVal);
         void setRegexValue(const StringData& re);
         void setSafeNumValue(const SafeNum& safeNum);
+        void setMinKey();
+        void setMaxKey();
+        void setUndefined();
+        void setNull();
+        void setSymbol(const StringData& symbolVal);
+
+        /** Set the value of this element to equal the value of the
+         *  provided BSONElement 'val'. The name of this Element is
+         *  not modified.
+         */
+        void setValueFromBSONElement(const BSONElement& val);
 
         // additional methods needed for BSON decoding
         Status prefix(std::string* result, char delim) const;
@@ -205,45 +203,17 @@ namespace mutablebson {
         Status appendSafeNum(const StringData& fieldName, const SafeNum num);
 
         //
-        // operator overloading
-        //
-
-        friend std::ostream& operator<<(std::ostream&, const Element&);
-
-        //
         // encapsulate state
         //
 
-        uint32_t getRep() const;
-        void setRep(uint32_t rep);
+        uint32_t getRep() const { return _rep; };
+        Document* getDocument() const { return _doc; }
 
-        Document* getDocument() const;
-        void setDocument(Document* doc);
-
-        std::string fieldName() const;
-        int fieldNameSize() const;
-
-        //
-        // output : mainly for debugging
-        //
-
-        std::ostream& put(std::ostream& os, uint32_t depth) const;
-        std::ostream& putValue(std::ostream& os) const;
-        std::string putType() const;
-
-        //
-        // For testing/debugging only: treat as private
-        //
-
-        ElementRep& getElementRep();
-        ElementRep& getElementRep() const;
-
-        //
-        // helper methods
-        //
-        Status checkSubtreeIsClean(Element e);
+        StringData getFieldName() const;
 
     private:
+        inline Status checkSubtreeIsClean(Element e);
+
         // We carry the document in every element. The document determines the element:
         // '_rep' is resolved through the document ElementVector and Heap
         Document* _doc;
@@ -271,10 +241,6 @@ namespace mutablebson {
 
         Heap* getHeap() { return _heap; }
         const Heap* getHeap() const { return _heap; }
-        std::string getString(uint32_t offset) const;
-        char* getStringBuffer(uint32_t offset) const;
-        uint32_t elementVectorSize() const;
-
 
         //
         // The distinguished root Element of the document, which is
@@ -315,7 +281,6 @@ namespace mutablebson {
 
     private:
         friend class Element;
-        friend class SubtreeIterator;
         friend class SiblingIterator;
 
         Heap* const _heap;
@@ -329,103 +294,49 @@ namespace mutablebson {
 
     class Iterator {
     public:
-        virtual ~Iterator() {}
         Iterator();
-        Iterator(Element e);
-        Iterator(const Iterator& it);
+
+        explicit Iterator(Element e)
+            : _doc(e.getDocument())
+            , _theRep(e.getRep()) {}
+
+        virtual ~Iterator() {}
 
         // iterator interface
         virtual Iterator& operator++() = 0;
         virtual bool done() const = 0;
-        Element operator*();
-        Element operator->();
+
+        Element operator*() { return Element(getDocument(), getRep()); }
 
         // acessors
-        Document* getDocument() const;
-        uint32_t getRep() const;
+        Document* getDocument() const { return _doc; }
+        uint32_t getRep() const { return _theRep; }
 
     protected:
         Document* _doc;
         uint32_t _theRep;
     };
 
-
-    /** implementation: subtree pre-order traversal */
-    class SubtreeIterator : public Iterator {
-    public:
-        virtual ~SubtreeIterator();
-        SubtreeIterator();
-        SubtreeIterator(Element e);
-        SubtreeIterator(const SubtreeIterator& it);
-
-        // iterator interface
-        virtual Iterator& operator++();
-        virtual bool done() const;
-
-    protected:
-        bool advance();
-
-    protected:  // state
-        bool _theDoneBit;
-    };
-
-
     /** implementation: sibling iterator */
     class SiblingIterator : public Iterator {
     public:
-        ~SiblingIterator();
-        SiblingIterator();
-        SiblingIterator(Element e);
-        SiblingIterator(const SiblingIterator& it);
+        SiblingIterator()
+            : Iterator() {}
 
-        // iterator interface
-        Iterator& operator++();
-        bool done() const;
+        explicit SiblingIterator(Element e)
+            : Iterator(e) {}
 
-    protected:    // state
+        virtual ~SiblingIterator() {}
+
+        virtual SiblingIterator& operator++() {
+            advance();
+            return *this;
+        }
+
+        virtual bool done() const;
+
+    private:
         bool advance();
-    };
-
-
-    /** interface: generic node filter - used by FilterIterator */
-    class Filter {
-    public:
-        virtual ~Filter() {}
-
-        // filter interface
-        virtual bool match(Element) const = 0;
-    };
-
-
-    /** implementation: field name filter */
-    class FieldNameFilter : public Filter {
-    public:
-        FieldNameFilter(const std::string& fieldName);
-        ~FieldNameFilter();
-
-        // filter interface
-        bool match(Element e) const;
-
-    private:
-        std::string _fieldName;
-    };
-
-
-    /** implementation: filtered subtree pre-order traversal */
-    class FilterIterator : public SubtreeIterator {
-
-    public:
-        ~FilterIterator();
-        FilterIterator();
-        FilterIterator(Element e, const Filter* filt);
-        FilterIterator(const FilterIterator& it);
-
-        // iterator interface
-        Iterator& operator++();
-        bool done() const;
-
-    private:
-        const Filter* _filter;
     };
 
 } // namespace mutablebson
