@@ -30,6 +30,8 @@
 
 using mongo::BSONObj;
 using mongo::ConnectionString;
+using mongo::MockDBClientConnection;
+using mongo::MockRemoteDBServer;
 
 using std::string;
 using std::vector;
@@ -60,6 +62,54 @@ namespace mongo_test {
             MockDBClientConnection conn(&server);
             conn.query("foo.bar");
             ASSERT_EQUALS(2U, server.getQueryCount());
+        }
+    }
+
+    TEST(MockDBClientConnTest, SetQueryReply) {
+        MockRemoteDBServer server("test");
+
+        {
+            MockDBClientConnection conn(&server);
+            std::auto_ptr<mongo::DBClientCursor> cursor = conn.query("test.user");
+            ASSERT(!cursor->more());
+        }
+
+        {
+            mongo::BSONArrayBuilder arrBuilder;
+            arrBuilder.append(BSON("x" << 1));
+            arrBuilder.append(BSON("y" << 2));
+            server.setQueryReply(arrBuilder.arr());
+        }
+
+        {
+            MockDBClientConnection conn(&server);
+            std::auto_ptr<mongo::DBClientCursor> cursor = conn.query("test.user");
+
+            ASSERT(cursor->more());
+            BSONObj firstDoc = cursor->next();
+            ASSERT_EQUALS(1, firstDoc["x"].numberInt());
+
+            ASSERT(cursor->more());
+            BSONObj secondDoc = cursor->next();
+            ASSERT_EQUALS(2, secondDoc["y"].numberInt());
+
+            ASSERT(!cursor->more());
+        }
+
+        // Make sure that repeated calls will still give you the same result
+        {
+            MockDBClientConnection conn(&server);
+            std::auto_ptr<mongo::DBClientCursor> cursor = conn.query("test.user");
+
+            ASSERT(cursor->more());
+            BSONObj firstDoc = cursor->next();
+            ASSERT_EQUALS(1, firstDoc["x"].numberInt());
+
+            ASSERT(cursor->more());
+            BSONObj secondDoc = cursor->next();
+            ASSERT_EQUALS(2, secondDoc["y"].numberInt());
+
+            ASSERT(!cursor->more());
         }
     }
 

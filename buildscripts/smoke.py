@@ -193,6 +193,8 @@ class mongod(object):
         if self.kwargs.get('auth'):
             argv += ['--auth']
             self.auth = True
+        if self.kwargs.get('use_ssl'):
+            argv += ['--sslOnNormalPorts', '--sslPEMKeyFile', 'jstests/libs/smoke.pem']
         print "running " + " ".join(argv)
         self.proc = self._start(buildlogger(argv, is_global=True))
 
@@ -387,6 +389,8 @@ def runTest(test):
             argv += ["--nodb"]
         if small_oplog or small_oplog_rs:
             argv += ["--eval", 'testingReplication = true;']
+        if use_ssl:
+            argv += ["--ssl"]
         argv += [path]
     elif ext in ["", ".exe"]:
         # Blech.
@@ -461,8 +465,9 @@ def runTest(test):
     
     if start_mongod:
         try:
-            c = Connection( "127.0.0.1" , int(mongod_port) )
+            c = Connection(host="127.0.0.1", port=int(mongod_port), ssl=use_ssl)
         except Exception,e:
+            print "Exception from pymongo: ", e
             raise TestServerFailure(path)
 
     print ""
@@ -477,14 +482,25 @@ def run_tests(tests):
     # but "with" is only supported on Python 2.5+
 
     if start_mongod:
-        master = mongod(small_oplog_rs=small_oplog_rs,small_oplog=small_oplog,no_journal=no_journal,no_preallocj=no_preallocj,auth=auth).__enter__()
+        master = mongod(small_oplog_rs=small_oplog_rs,
+                        small_oplog=small_oplog,
+                        no_journal=no_journal,
+                        no_preallocj=no_preallocj,
+                        auth=auth,
+                        use_ssl=use_ssl).__enter__()
     else:
         master = Nothing()
     try:
         if small_oplog:
             slave = mongod(slave=True).__enter__()
         elif small_oplog_rs:
-            slave = mongod(slave=True,small_oplog_rs=small_oplog_rs,small_oplog=small_oplog,no_journal=no_journal,no_preallocj=no_preallocj,auth=auth).__enter__()
+            slave = mongod(slave=True,
+                           small_oplog_rs=small_oplog_rs,
+                           small_oplog=small_oplog,
+                           no_journal=no_journal,
+                           no_preallocj=no_preallocj,
+                           auth=auth,
+                           use_ssl=use_ssl).__enter__()
             primary = Connection(port=master.port, slave_okay=True);
 
             primary.admin.command({'replSetInitiate' : {'_id' : 'foo', 'members' : [
@@ -517,7 +533,12 @@ def run_tests(tests):
                         if (tests_run+1) % 20 == 0:
                             # restart mongo every 20 times, for our 32-bit machines
                             master.__exit__(None, None, None)
-                            master = mongod(small_oplog_rs=small_oplog_rs,small_oplog=small_oplog,no_journal=no_journal,no_preallocj=no_preallocj,auth=auth).__enter__()
+                            master = mongod(small_oplog_rs=small_oplog_rs,
+                                            small_oplog=small_oplog,
+                                            no_journal=no_journal,
+                                            no_preallocj=no_preallocj,
+                                            auth=auth,
+                                            use_ssl=use_ssl).__enter__()
 
                 except TestFailure, f:
                     try:
@@ -567,6 +588,8 @@ at the end of testing:"""
     if losers or lost_in_slave or lost_in_master or screwy_in_slave:
         raise Exception("Test failures")
 
+# Keys are the suite names (passed on the command line to smoke.py)
+# Values are pairs: (filenames, <start mongod before running tests>)
 suiteGlobalConfig = {"js": ("[!_]*.js", True),
                      "quota": ("quota/*.js", True),
                      "jsPerf": ("perf/*.js", True),
@@ -582,8 +605,9 @@ suiteGlobalConfig = {"js": ("[!_]*.js", True),
                      "sharding": ("sharding/*.js", False),
                      "tool": ("tool/*.js", False),
                      "aggregation": ("aggregation/*.js", True),
-                     "multiVersion": ("multiVersion/*.js", True ),
-                     "failPoint": ("fail_point/*.js", False)
+                     "multiVersion": ("multiVersion/*.js", True),
+                     "failPoint": ("fail_point/*.js", False),
+                     "ssl": ("ssl/*.js", True)
                      }
 
 def expand_suites(suites,expandUseDB=True):
@@ -651,9 +675,13 @@ def add_exe(e):
     return e
 
 def set_globals(options, tests):
-    global mongod_executable, mongod_port, shell_executable, continue_on_failure, small_oplog, small_oplog_rs, no_journal, no_preallocj, auth, keyFile, smoke_db_prefix, test_path, start_mongod
+    global mongod_executable, mongod_port, shell_executable, continue_on_failure, small_oplog, small_oplog_rs
+    global no_journal, no_preallocj, auth, keyFile, smoke_db_prefix, test_path, start_mongod
+    global use_ssl
     global file_of_commands_mode
     start_mongod = options.start_mongod
+    if hasattr(options, 'use_ssl'):
+        use_ssl = options.use_ssl
     #Careful, this can be called multiple times
     test_path = options.test_path
 
@@ -813,8 +841,12 @@ def main():
     parser.add_option('--with-cleanbb', dest='with_cleanbb', default=False,
                       action="store_true",
                       help='Clear database files from previous smoke.py runs')
-    parser.add_option(
-        '--dont-start-mongod', dest='start_mongod', default=True, action='store_false')
+    parser.add_option('--dont-start-mongod', dest='start_mongod', default=True, 
+                      action='store_false',
+                      help='Do not start mongod before commencing test running')
+    parser.add_option('--use-ssl', dest='use_ssl', default=False,
+                      action='store_true',
+                      help='Run mongo shell and mongod instances with SSL encryption')
 
     # Buildlogger invocation from command line
     parser.add_option('--buildlogger-builder', dest='buildlogger_builder', default=None,
