@@ -1,3 +1,4 @@
+if (0) { // SERVER-7881
 /**
  * This tests using DB commands with authentication enabled when sharded.
  */
@@ -225,8 +226,8 @@ var checkAdminReadOps = function( hasReadAuth ) {
         checkCommandFailed( adminDB, {getCmdLineOpts : 1} );
         checkCommandFailed( adminDB, {serverStatus : 1} );
         checkCommandFailed( adminDB, {listShards : 1} );
-        checkCommandFailed( adminDB, {whatsmyuri : 1} );
-        // isdbgrid and ismaster don't require any auth
+        // whatsmyuri, isdbgrid, and ismaster don't require any auth
+        checkCommandSucceeded( adminDB, {whatsmyuri : 1} );
         checkCommandSucceeded( adminDB, {isdbgrid : 1} );
         checkCommandSucceeded( adminDB, {ismaster : 1} );
     }
@@ -324,3 +325,4 @@ adminDB.printShardingStatus();
 
 
 st.stop();
+}

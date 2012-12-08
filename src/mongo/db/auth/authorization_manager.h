@@ -17,6 +17,7 @@
 #pragma once
 
 #include <string>
+#include <vector>
 
 #include "mongo/base/disallow_copying.h"
 #include "mongo/base/status.h"
@@ -65,7 +66,7 @@ namespace mongo {
         // comes from userSource (will generally be a database name or $sasl).  Returns NULL
         // if no such user is found.
         // Ownership of the returned Principal remains with _authenticatedPrincipals
-        Principal* lookupPrincipal(const std::string& name, const std::string& userSource);
+        Principal* lookupPrincipal(const std::string& name, const std::string& userSource) const;
 
         // Removes any authenticated principals whose authorization credentials came from the given
         // database, and revokes any privileges that were granted via that principal.
@@ -77,6 +78,9 @@ namespace mongo {
         // Adds a new principal with the given principal name and authorizes it with full access.
         // Used to grant internal threads full access.
         void grantInternalAuthorization(const std::string& principalName);
+
+        // Checks if this connection has been authenticated as an internal user.
+        bool hasInternalAuthorization() const;
 
         // Checks if this connection has the privileges required to perform the given action
         // on the given resource.  Contains all the authorization logic including handling things
@@ -103,11 +107,34 @@ namespace mongo {
             return _externalState->getPrivilegeDocument(dbname, userName, result);
         }
 
+        // Checks if this connection has the privileges necessary to perform a query on the given
+        // namespace.
+        Status checkAuthForQuery(const std::string& ns);
+
+        // Checks if this connection has the privileges necessary to perform an update on the given
+        // namespace.
+        Status checkAuthForUpdate(const std::string& ns, bool upsert);
+
+        // Checks if this connection has the privileges necessary to perform an insert to the given
+        // namespace.
+        Status checkAuthForInsert(const std::string& ns);
+
+        // Checks if this connection has the privileges necessary to perform a delete on the given
+        // namespace.
+        Status checkAuthForDelete(const std::string& ns);
+
+        // Checks if this connection has the privileges necessary to perform a getMore on the given
+        // namespace.
+        Status checkAuthForGetMore(const std::string& ns);
+
+        // Checks if this connection is authorized for all the given Privileges
+        Status checkAuthForPrivileges(const vector<Privilege>& privileges);
+
         // Given a database name and a readOnly flag return an ActionSet describing all the actions
         // that an old-style user with those attributes should be given.
         static ActionSet getActionsForOldStyleUser(const std::string& dbname, bool readOnly);
 
-        // Parses the privilege document and returns a PrivilegeSet of all the Capabilities that
+        // Parses the privilege document and returns a PrivilegeSet of all the Privileges that
         // the privilege document grants.
         static Status buildPrivilegeSet(const std::string& dbname,
                                         Principal* principal,

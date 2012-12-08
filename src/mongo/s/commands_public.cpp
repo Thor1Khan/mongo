@@ -263,8 +263,8 @@ namespace mongo {
                                                const BSONObj& cmdObj,
                                                std::vector<Privilege>* out) {
                 ActionSet actions;
-                actions.addAction(ActionType::profile);
-                out->push_back(Privilege(AuthorizationManager::SERVER_RESOURCE_NAME, actions));
+                actions.addAction(ActionType::profileEnable);
+                out->push_back(Privilege(dbname, actions));
             }
         } profileCmd;
         
@@ -1828,7 +1828,7 @@ namespace mongo {
         if ( !p ) return false;
         if ( strcmp(p, ".$cmd") != 0 ) return false;
 
-        bool ok = false;
+        bool ok = true;
 
         BSONElement e = jsobj.firstElement();
         map<string,Command*>::iterator i;
@@ -1844,31 +1844,40 @@ namespace mongo {
 
             char cl[256];
             nsToDatabase(ns, cl);
-            if( c->requiresAuth() && !ai->isAuthorizedForLock(cl, c->locktype())) {
-                ok = false;
-                errmsg = "unauthorized";
-                anObjBuilder.append( "note" , str::stream() << "need to authorized on db: " << cl << " for command: " << e.fieldName() );
+            if (!noauth) {
+                std::vector<Privilege> privileges;
+                c->addRequiredPrivileges(cl, jsobj, &privileges);
+                AuthorizationManager* authManager = client->getAuthorizationManager();
+                if (c->requiresAuth() && (!authManager->checkAuthForPrivileges(privileges).isOK()
+                                || !ai->isAuthorizedForLock(cl, c->locktype()))) {
+                    ok = false;
+                    errmsg = "unauthorized";
+                    anObjBuilder.append("note", str::stream() << "not authorized for command: " <<
+                                        e.fieldName() << " on database " << cl);
+                }
             }
-            else if( c->adminOnly() && c->localHostOnlyIfNoAuth( jsobj ) && noauth && !ai->isLocalHost() ) {
+            if (ok && c->adminOnly() && c->localHostOnlyIfNoAuth(jsobj) && noauth &&
+                    !ai->isLocalHost()) {
                 ok = false;
                 errmsg = "unauthorized: this command must run from localhost when running db without auth";
                 log() << "command denied: " << jsobj.toString() << endl;
             }
-            else if ( c->adminOnly() && !startsWith(ns, "admin.") ) {
+            if (ok && c->adminOnly() && !startsWith(ns, "admin.")) {
                 ok = false;
                 errmsg = "access denied - use admin db";
             }
-            else if ( jsobj.getBoolField( "help" ) ) {
+            if (ok && jsobj.getBoolField("help")) {
                 stringstream help;
                 help << "help for: " << e.fieldName() << " ";
                 c->help( help );
                 anObjBuilder.append( "help" , help.str() );
             }
-            else {
+            if (ok) {
                 try {
                     ok = c->run( nsToDatabase( ns ) , jsobj, queryOptions, errmsg, anObjBuilder, false );
                 }
                 catch (DBException& e) {
+                    ok = false;
                     int code = e.getCode();
                     if (code == RecvStaleConfigCode) { // code for StaleConfigException
                         throw;

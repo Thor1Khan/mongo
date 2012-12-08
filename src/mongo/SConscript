@@ -30,6 +30,7 @@ env.StaticLibrary('foundation',
                   [ 'util/assert_util.cpp',
                     'util/concurrency/mutexdebugger.cpp',
                     'util/debug_util.cpp',
+                    'util/exception_filter_win32.cpp',
                     'util/log.cpp',
                     'util/signal_handlers.cpp',
                     'util/text.cpp',
@@ -386,6 +387,7 @@ serverOnlyFiles = [ "db/curop.cpp",
                     "db/scanandorder.cpp",
                     "db/explain.cpp",
                     "db/geo/2d.cpp",
+                    "db/geo/geonear.cpp",
                     "db/geo/haystack.cpp",
                     "db/geo/s2common.cpp",
                     "db/geo/s2cursor.cpp",
@@ -413,7 +415,7 @@ serverOnlyFiles = [ "db/curop.cpp",
                     "db/pipeline/document_source_cursor.cpp",
                     "db/driverHelpers.cpp" ]
 
-env.Library( "dbcmdline", "db/cmdline.cpp", LIBDEPS=['bson'] )
+env.Library( "dbcmdline", "db/cmdline.cpp", LIBDEPS=['bson', 'server_parameters'] )
 env.CppUnitTest('cmdline_test', 'db/cmdline_test.cpp', LIBDEPS=['dbcmdline'])
 
 env.Library('stacktrace', 'util/stacktrace.cpp')
