@@ -26,6 +26,7 @@
 #include <cmath>
 #include <limits>
 
+#include "mongo/base/parse_number.h"
 #include "mongo/bson/bsonelement.h"
 #include "mongo/bson/bsonobj.h"
 #include "mongo/bson/bsonmisc.h"
@@ -337,12 +338,20 @@ namespace mongo {
             return *this;
         }
 
+        BSONObjBuilder& append(const StringData& fieldName, const BSONRegEx& regex) {
+            return appendRegex(fieldName, regex.pattern, regex.flags);
+        }
+
         BSONObjBuilder& appendCode(const StringData& fieldName, const StringData& code) {
             _b.appendNum((char) Code);
             _b.appendStr(fieldName);
             _b.appendNum((int) code.size()+1);
             _b.appendStr(code);
             return *this;
+        }
+
+        BSONObjBuilder& append(const StringData& fieldName, const BSONCode& code) {
+            return appendCode(fieldName, code.code);
         }
 
         /** Append a string element. 
@@ -364,7 +373,11 @@ namespace mongo {
         }
         /** Append a string element */
         BSONObjBuilder& append(const StringData& fieldName, const StringData& str) {
-            return append(fieldName, str.data(), (int) str.size()+1);
+            _b.appendNum((char) String);
+            _b.appendStr(fieldName);
+            _b.appendNum((int)str.size()+1);
+            _b.appendStr(str, true);
+            return *this;
         }
 
         BSONObjBuilder& appendSymbol(const StringData& fieldName, const StringData& symbol) {
@@ -373,6 +386,10 @@ namespace mongo {
             _b.appendNum((int) symbol.size()+1);
             _b.appendStr(symbol);
             return *this;
+        }
+
+        BSONObjBuilder& append(const StringData& fieldName, const BSONSymbol& symbol) {
+            return appendSymbol(fieldName, symbol.symbol);
         }
 
         /** Implements builder interface but no-op in ObjBuilder */
@@ -409,7 +426,13 @@ namespace mongo {
         }
 
         /**
-         * To store an OpTime in BSON, use this function. Pass the OpTime as a Date, as follows:
+         * To store an OpTime in BSON, use this function.
+         * This captures both the secs and inc fields.
+         */
+        BSONObjBuilder& append(const StringData& fieldName, OpTime optime);
+
+        /**
+         * Alternative way to store an OpTime in BSON. Pass the OpTime as a Date, as follows:
          *
          *     builder.appendTimestamp("field", optime.asDate());
          *
@@ -442,6 +465,10 @@ namespace mongo {
             return *this;
         }
 
+        BSONObjBuilder& append(const StringData& fieldName, const BSONDBRef& dbref) {
+            return appendDBRef(fieldName, dbref.ns, dbref.oid);
+        }
+
         /** Append a binary data element
             @param fieldName name of the field
             @param len length of the binary data in bytes
@@ -456,6 +483,10 @@ namespace mongo {
             _b.appendNum( (char) type );
             _b.appendBuf( data, len );
             return *this;
+        }
+
+        BSONObjBuilder& append(const StringData& fieldName, const BSONBinData& bd) {
+            return appendBinData(fieldName, bd.length, bd.type, bd.data);
         }
 
         /**
@@ -485,6 +516,10 @@ namespace mongo {
             _b.appendStr( code );
             _b.appendBuf( ( void * )scope.objdata(), scope.objsize() );
             return *this;
+        }
+
+        BSONObjBuilder& append(const StringData& fieldName, const BSONCodeWScope& cws) {
+            return appendCodeWScope(fieldName, cws.code, cws.scope);
         }
 
         void appendUndefined( const StringData& fieldName ) {
@@ -682,7 +717,8 @@ namespace mongo {
 
         template <typename T>
         BSONArrayBuilder& operator<<(const T& x) {
-            return append(x);
+            _b << num().c_str() << x;
+            return *this;
         }
 
         void appendNull() {
@@ -797,10 +833,11 @@ namespace mongo {
         BSONObjBuilder& append(const StringData& fieldName, unsigned long long val);
 
         void fill( const StringData& name ) {
-            char *r;
-            long int n = strtol( name.data(), &r, 10 );
-            if ( *r )
-                uasserted( 13048, (std::string)"can't append to array using string field name [" + name.data() + "]" );
+            long int n;
+            Status status = parseNumberFromStringWithBase( name, 10, &n );
+            uassert( 13048,
+                     (string)"can't append to array using string field name: " + name.toString(),
+                     status.isOK() );
             fill(n);
         }
 

@@ -1,4 +1,4 @@
-// v8_wrapper.h
+// builder_test.h
 
 /*    Copyright 2009 10gen Inc.
  *
@@ -15,20 +15,20 @@
  *    limitations under the License.
  */
 
-#pragma once
+#include "mongo/unittest/unittest.h"
 
-#include <v8.h>
-
-#include "mongo/db/jsobj.h"
-#include "mongo/scripting/engine_v8.h"
+#include "mongo/bson/util/builder.h"
 
 namespace mongo {
+    TEST( Builder, String1 ) {
+        const char * big = "eliot was here";
+        StringData small( big, 5 );
+        ASSERT_EQUALS( small, "eliot" );
 
-    v8::Handle<v8::FunctionTemplate> getObjectWrapperTemplate(V8Scope* scope);
+        BufBuilder bb;
+        bb.appendStr( small );
 
-    class WrapperHolder;
-    WrapperHolder* createWrapperHolder(V8Scope* scope,
-                                       const BSONObj* o,
-                                       bool readOnly,
-                                       bool iDelete);
+        ASSERT_EQUALS( 0, strcmp( bb.buf(), "eliot" ) );
+        ASSERT_EQUALS( 0, strcmp( "eliot", bb.buf() ) );
+    }
 }
