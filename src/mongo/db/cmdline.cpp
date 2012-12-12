@@ -102,6 +102,8 @@ namespace {
         ("sslOnNormalPorts" , "use ssl on configured ports" )
         ("sslPEMKeyFile" , po::value<string>(&cmdLine.sslPEMKeyFile), "PEM file for ssl" )
         ("sslPEMKeyPassword" , new PasswordValue(&cmdLine.sslPEMKeyPassword) , "PEM file password" )
+        ("sslCAFile", po::value<std::string>(&cmdLine.sslCAFile), 
+         "Certificate Authority file for SSL")
 #endif
         ;
         
@@ -397,6 +399,14 @@ namespace {
 #ifdef MONGO_SSL
         if (params.count("sslOnNormalPorts") ) {
             cmdLine.sslOnNormalPorts = true;
+            if ( cmdLine.sslPEMKeyFile.size() == 0 ) {
+                log() << "need sslPEMKeyFile" << endl;
+                return false;
+            }
+        }
+        else if ( cmdLine.sslPEMKeyFile.size() || cmdLine.sslPEMKeyPassword.size() ) {
+            log() << "need to enable sslOnNormalPorts" << endl;
+            return false;
         }
 #endif
 

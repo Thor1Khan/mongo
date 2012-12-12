@@ -180,6 +180,8 @@ class mongod(object):
             call(argv)
         utils.ensureDir(dir_name)
         argv = [mongod_executable, "--port", str(self.port), "--dbpath", dir_name]
+        # This should always be set for tests
+        argv += ['--setParameter', 'enableTestCommands=1']
         if self.kwargs.get('small_oplog'):
             argv += ["--master", "--oplogSize", "511"]
         if self.kwargs.get('small_oplog_rs'):
@@ -194,7 +196,10 @@ class mongod(object):
             argv += ['--auth']
             self.auth = True
         if self.kwargs.get('use_ssl'):
-            argv += ['--sslOnNormalPorts', '--sslPEMKeyFile', 'jstests/libs/smoke.pem']
+            argv += ['--sslOnNormalPorts',
+                     '--sslPEMKeyFile', 'jstests/libs/server.pem',
+                     '--sslCAFile', 'jstests/libs/ca.pem']
+        
         print "running " + " ".join(argv)
         self.proc = self._start(buildlogger(argv, is_global=True))
 
@@ -390,7 +395,9 @@ def runTest(test):
         if small_oplog or small_oplog_rs:
             argv += ["--eval", 'testingReplication = true;']
         if use_ssl:
-            argv += ["--ssl"]
+            argv += ["--ssl",
+                     "--sslPEMKeyFile", "jstests/libs/client.pem",
+                     "--sslCAFile", "jstests/libs/ca.pem"]
         argv += [path]
     elif ext in ["", ".exe"]:
         # Blech.
@@ -403,7 +410,7 @@ def runTest(test):
             argv = [test_path and os.path.abspath(os.path.join(test_path, path)) or path,
                     "--port", mongod_port]
     else:
-        raise Bug("fell off in extenstion case: %s" % path)
+        raise Bug("fell off in extension case: %s" % path)
 
     if keyFile:
         f = open(keyFile, 'r')
@@ -457,7 +464,19 @@ def runTest(test):
     t2 = time.time()
     del os.environ['MONGO_TEST_FILENAME']
 
-    sys.stdout.write("                %fms\n" % ((t2 - t1) * 1000))
+    timediff = t2 - t1
+    # timediff is seconds by default
+    scale = 1
+    suffix = "seconds"
+    # if timediff is less than 10 seconds use ms
+    if timediff < 10:
+        scale = 1000
+        suffix = "ms"
+    # if timediff is more than 60 seconds use minutes
+    elif timediff > 60:
+        scale = 1.0 / 60.0
+        suffix = "minutes"
+    sys.stdout.write("                %10.4f %s\n" % ((timediff) * scale, suffix))
     sys.stdout.flush()
 
     if r != 0:
