@@ -279,7 +279,7 @@ namespace mongo {
     }
 
     int versionCmp(StringData rhs, StringData lhs) {
-        if (strcmp(rhs.__data(),lhs.__data()) == 0)
+        if ( rhs == lhs )
             return 0;
 
         // handle "1.2.3-" and "1.2.3-pre"
@@ -292,7 +292,7 @@ namespace mongo {
                 return -1;
         }
 
-        return LexNumCmp::cmp(rhs.__data(), lhs.__data(), false);
+        return LexNumCmp::cmp(rhs, lhs, false);
     }
 
     class VersionCmpTest : public StartupTest {
