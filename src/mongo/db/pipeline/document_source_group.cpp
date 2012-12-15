@@ -52,7 +52,7 @@ namespace mongo {
 
         ++groupsIterator;
         if (groupsIterator == groups.end()) {
-            pCurrent.reset();
+            dispose();
             return false;
         }
 
@@ -65,6 +65,14 @@ namespace mongo {
             populate();
 
         return pCurrent;
+    }
+
+    void DocumentSourceGroup::dispose() {
+        GroupsType().swap(groups);
+        groupsIterator = groups.end();
+        pCurrent = Document();
+
+        pSource->dispose();
     }
 
     void DocumentSourceGroup::sourceToBson(
@@ -350,8 +358,8 @@ namespace mongo {
         for(size_t i = 0; i < n; ++i) {
             Value pValue((*pGroup)[i]->getValue());
             if (pValue.missing()) {
-                // we return undefined in this case so return objects are predictable
-                out.addField(vFieldName[i], Value(BSONUndefined));
+                // we return null in this case so return objects are predictable
+                out.addField(vFieldName[i], Value(BSONNULL));
             }
             else {
                 out.addField(vFieldName[i], pValue);

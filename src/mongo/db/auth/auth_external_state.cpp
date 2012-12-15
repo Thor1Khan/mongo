@@ -22,37 +22,57 @@
 
 namespace mongo {
 
+    static const char USER_FIELD[] = "user";
+    static const char USER_SOURCE_FIELD[] = "userSource";
+    static const char PASSWORD_FIELD[] = "pwd";
+
     AuthExternalState::AuthExternalState() {}
     AuthExternalState::~AuthExternalState() {}
 
-    Status AuthExternalState::getPrivilegeDocumentOverConnection(DBClientBase* conn,
-                                                                 const std::string& dbname,
-                                                                 const std::string& principalName,
-                                                                 BSONObj* result) {
-        if (principalName == internalSecurity.user) {
+    Status AuthExternalState::getPrivilegeDocument(const std::string& dbname,
+                                                   const PrincipalName& principalName,
+                                                   BSONObj* result) {
+        if (principalName.getUser() == internalSecurity.user) {
             if (internalSecurity.pwd.empty()) {
                 return Status(ErrorCodes::UserNotFound,
                               "key file must be used to log in with internal user",
                               15889);
             }
-            *result = BSON("user" << principalName << "pwd" << internalSecurity.pwd).getOwned();
+            *result = BSON(USER_FIELD << internalSecurity.user <<
+                           PASSWORD_FIELD << internalSecurity.pwd).getOwned();
             return Status::OK();
         }
 
         std::string usersNamespace = dbname + ".system.users";
 
         BSONObj userBSONObj;
-        BSONObj query = BSON("user" << principalName);
-        userBSONObj = conn->findOne(usersNamespace, query, 0, QueryOption_SlaveOk);
-        if (userBSONObj.isEmpty()) {
+        BSONObjBuilder queryBuilder;
+        queryBuilder.append(USER_FIELD, principalName.getUser());
+        if (principalName.getDB() == dbname) {
+            queryBuilder.appendNull(USER_SOURCE_FIELD);
+        }
+        else {
+            queryBuilder.append(USER_SOURCE_FIELD, principalName.getDB());
+        }
+
+        bool found = _findUser(usersNamespace, queryBuilder.obj(), &userBSONObj);
+        if (!found) {
             return Status(ErrorCodes::UserNotFound,
-                          mongoutils::str::stream() << "auth: couldn't find user " << principalName
-                                                    << ", " << usersNamespace,
+                          mongoutils::str::stream() << "auth: couldn't find user " <<
+                          principalName.toString() << ", " << usersNamespace,
                           0);
         }
 
         *result = userBSONObj.getOwned();
         return Status::OK();
+    }
+
+    bool AuthExternalState::_hasPrivilegeDocument(const std::string& dbname) const {
+        std::string usersNamespace = dbname + ".system.users";
+
+        BSONObj userBSONObj;
+        BSONObj query;
+        return _findUser(usersNamespace, query, &userBSONObj);
     }
 
 }  // namespace mongo

@@ -646,6 +646,7 @@ cscript //Nologo "$(ProjectDir)..\shell\createCPPfromJavaScriptFiles.js" "$(Proj
     <ClInclude Include="..\scripting\bson_template_evaluator.h" />
     <ClInclude Include="..\scripting\engine.h" />
     <ClInclude Include="..\scripting\engine_spidermonkey.h" />
+    <ClInclude Include="..\scripting\engine_spidermonkey_internal.h" />
     <ClInclude Include="..\server.h" />
     <ClInclude Include="..\s\chunk.h" />
     <ClInclude Include="..\s\cluster_constants.h" />
@@ -726,6 +727,7 @@ cscript //Nologo "$(ProjectDir)..\shell\createCPPfromJavaScriptFiles.js" "$(Proj
     <ClInclude Include="..\util\descriptive_stats-inl.h" />
     <ClInclude Include="..\util\descriptive_stats.h" />
     <ClInclude Include="..\util\elapsed_tracker.h" />
+    <ClInclude Include="..\util\exception_filter_win32.h" />
     <ClInclude Include="..\util\exit_code.h" />
     <ClInclude Include="..\util\fail_point.h" />
     <ClInclude Include="..\util\fail_point_registry.h" />
@@ -1476,6 +1478,7 @@ cscript //Nologo "$(ProjectDir)..\shell\createCPPfromJavaScriptFiles.js" "$(Proj
     <ClCompile Include="..\db\pipeline\document_source_cursor.cpp" />
     <ClCompile Include="..\db\pipeline\document_source_filter.cpp" />
     <ClCompile Include="..\db\pipeline\document_source_filter_base.cpp" />
+    <ClCompile Include="..\db\pipeline\document_source_geo_near.cpp" />
     <ClCompile Include="..\db\pipeline\document_source_group.cpp" />
     <ClCompile Include="..\db\pipeline\document_source_limit.cpp" />
     <ClCompile Include="..\db\pipeline\document_source_match.cpp" />
@@ -1596,6 +1599,7 @@ cscript //Nologo "$(ProjectDir)..\shell\createCPPfromJavaScriptFiles.js" "$(Proj
     <ClCompile Include="..\util\concurrency\thread_pool.cpp" />
     <ClCompile Include="..\util\debug_util.cpp" />
     <ClCompile Include="..\util\elapsed_tracker.cpp" />
+    <ClCompile Include="..\util\exception_filter_win32.cpp" />
     <ClCompile Include="..\util\fail_point.cpp" />
     <ClCompile Include="..\util\fail_point_registry.cpp" />
     <ClCompile Include="..\util\fail_point_service.cpp" />

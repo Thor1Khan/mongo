@@ -21,12 +21,13 @@
 
 #include "mongo/base/disallow_copying.h"
 #include "mongo/base/status.h"
-#include "mongo/db/auth/acquired_privilege.h"
 #include "mongo/db/auth/action_set.h"
 #include "mongo/db/auth/action_type.h"
 #include "mongo/db/auth/auth_external_state.h"
 #include "mongo/db/auth/principal.h"
+#include "mongo/db/auth/principal_name.h"
 #include "mongo/db/auth/principal_set.h"
+#include "mongo/db/auth/privilege.h"
 #include "mongo/db/auth/privilege_set.h"
 
 namespace mongo {
@@ -65,41 +66,45 @@ namespace mongo {
         // Returns the authenticated principal with the given name.  Returns NULL
         // if no such user is found.
         // Ownership of the returned Principal remains with _authenticatedPrincipals
-        Principal* lookupPrincipal(const PrincipalName& name) const;
+        Principal* lookupPrincipal(const PrincipalName& name);
+
+        // Gets an iterator over the names of all authenticated principals stored in this manager.
+        PrincipalSet::NameIterator getAuthenticatedPrincipalNames();
 
         // Removes any authenticated principals whose authorization credentials came from the given
         // database, and revokes any privileges that were granted via that principal.
         void logoutDatabase(const std::string& dbname);
 
         // Grant this connection the given privilege.
-        Status acquirePrivilege(const AcquiredPrivilege& privilege);
+        Status acquirePrivilege(const Privilege& privilege,
+                                const PrincipalName& authorizingPrincipal);
 
         // Adds a new principal with the given principal name and authorizes it with full access.
         // Used to grant internal threads full access.
         void grantInternalAuthorization(const std::string& principalName);
 
         // Checks if this connection has been authenticated as an internal user.
-        bool hasInternalAuthorization() const;
+        bool hasInternalAuthorization();
 
         // Checks if this connection has the privileges required to perform the given action
         // on the given resource.  Contains all the authorization logic including handling things
         // like the localhost exception.  Returns true if the action may proceed on the resource.
-        bool checkAuthorization(const std::string& resource, ActionType action) const;
+        bool checkAuthorization(const std::string& resource, ActionType action);
 
         // Same as above but takes an ActionSet instead of a single ActionType.  Returns true if
         // all of the actions may proceed on the resource.
-        bool checkAuthorization(const std::string& resource, ActionSet actions) const;
+        bool checkAuthorization(const std::string& resource, ActionSet actions);
 
         // Parses the privilege documents and acquires all privileges that the privilege document
         // grants
         Status acquirePrivilegesFromPrivilegeDocument(const std::string& dbname,
-                                                      Principal* principal,
+                                                      const PrincipalName& principal,
                                                       const BSONObj& privilegeDocument);
 
         // Returns the privilege document with the given user name in the given database. Currently
         // this information comes from the system.users collection in that database.
         Status getPrivilegeDocument(const std::string& dbname,
-                                    const std::string& userName,
+                                    const PrincipalName& userName,
                                     BSONObj* result) {
             return _externalState->getPrivilegeDocument(dbname, userName, result);
         }
@@ -134,7 +139,7 @@ namespace mongo {
         // Parses the privilege document and returns a PrivilegeSet of all the Privileges that
         // the privilege document grants.
         static Status buildPrivilegeSet(const std::string& dbname,
-                                        Principal* principal,
+                                        const PrincipalName& principal,
                                         const BSONObj& privilegeDocument,
                                         PrivilegeSet* result);
 
@@ -144,7 +149,7 @@ namespace mongo {
         // Privileges that the privilege document grants.
         static Status _buildPrivilegeSetFromOldStylePrivilegeDocument(
                 const std::string& dbname,
-                Principal* principal,
+                const PrincipalName& principal,
                 const BSONObj& privilegeDocument,
                 PrivilegeSet* result);
 

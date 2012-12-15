@@ -102,10 +102,10 @@ namespace mongo {
         
         if ( ssl ) {
 #ifdef MONGO_SSL
+            const SSLParams params(cmdLine.sslPEMKeyFile, 
+                                   cmdLine.sslPEMKeyPassword);
             // never deleted
-            SSLManager* mgr = new SSLManager(cmdLine.sslPEMKeyFile, 
-                                             cmdLine.sslPEMKeyPassword, 
-                                             cmdLine.sslCAFile);
+            SSLManager* mgr = new SSLManager(params);
 
             sock.secure(mgr);
 #else

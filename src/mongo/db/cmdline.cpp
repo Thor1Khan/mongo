@@ -84,8 +84,6 @@ namespace {
         ("logappend" , "append to logpath instead of over-writing" )
         ("pidfilepath", po::value<string>(), "full path to pidfile (if not set, no pidfile is created)")
         ("keyFile", po::value<string>(), "private key for cluster authentication")
-        ("enableFaultInjection", "enable the fault injection framework, for debugging."
-                " DO NOT USE IN PRODUCTION")
         ("setParameter", po::value< std::vector<std::string> >()->composing(),
                 "Set a configurable parameter")
 #ifndef _WIN32
@@ -104,6 +102,9 @@ namespace {
         ("sslPEMKeyPassword" , new PasswordValue(&cmdLine.sslPEMKeyPassword) , "PEM file password" )
         ("sslCAFile", po::value<std::string>(&cmdLine.sslCAFile), 
          "Certificate Authority file for SSL")
+        ("sslCRLFile", po::value<std::string>(&cmdLine.sslCRLFile),
+         "Certificate Revocation List file for SSL")
+        ("sslForceCertificateValidation", "require each client to present a valid certificate")
 #endif
         ;
         
@@ -397,14 +398,26 @@ namespace {
         }
 
 #ifdef MONGO_SSL
-        if (params.count("sslOnNormalPorts") ) {
+        if (params.count("sslForceCertificateValidation")) {
+            cmdLine.sslForceCertificateValidation = true;
+        }
+        if (params.count("sslOnNormalPorts")) {
             cmdLine.sslOnNormalPorts = true;
             if ( cmdLine.sslPEMKeyFile.size() == 0 ) {
                 log() << "need sslPEMKeyFile" << endl;
                 return false;
             }
+            if (cmdLine.sslForceCertificateValidation &&
+                cmdLine.sslCAFile.empty()) {
+                log() << "need sslCAFile with sslForceCertificateValidation" << endl;
+                return false;
+            }
         }
-        else if ( cmdLine.sslPEMKeyFile.size() || cmdLine.sslPEMKeyPassword.size() ) {
+        else if (cmdLine.sslPEMKeyFile.size() || 
+                 cmdLine.sslPEMKeyPassword.size() ||
+                 cmdLine.sslCAFile.size() ||
+                 cmdLine.sslCRLFile.size() ||
+                 cmdLine.sslForceCertificateValidation) {
             log() << "need to enable sslOnNormalPorts" << endl;
             return false;
         }

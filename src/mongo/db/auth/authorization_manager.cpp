@@ -21,12 +21,12 @@
 
 #include "mongo/base/init.h"
 #include "mongo/base/status.h"
-#include "mongo/db/auth/acquired_privilege.h"
 #include "mongo/db/auth/action_set.h"
 #include "mongo/db/auth/action_type.h"
 #include "mongo/db/auth/auth_external_state.h"
 #include "mongo/db/auth/principal.h"
 #include "mongo/db/auth/principal_set.h"
+#include "mongo/db/auth/privilege.h"
 #include "mongo/db/auth/privilege_set.h"
 #include "mongo/db/client.h"
 #include "mongo/db/namespacestring.h"
@@ -46,7 +46,6 @@ namespace mongo {
     namespace {
         const std::string ADMIN_DBNAME = "admin";
         const std::string LOCAL_DBNAME = "local";
-        const std::string WILDCARD_DBNAME = "*";
     }
 
     // ActionSets for the various system roles.  These ActionSets contain all the actions that
@@ -193,30 +192,34 @@ namespace mongo {
         _authenticatedPrincipals.add(principal);
     }
 
-    Principal* AuthorizationManager::lookupPrincipal(const PrincipalName& name) const {
+    Principal* AuthorizationManager::lookupPrincipal(const PrincipalName& name) {
         return _authenticatedPrincipals.lookup(name);
     }
 
     void AuthorizationManager::logoutDatabase(const std::string& dbname) {
         Principal* principal = _authenticatedPrincipals.lookupByDBName(dbname);
-        _acquiredPrivileges.revokePrivilegesFromPrincipal(principal);
+        if (!principal)
+            return;
+        _acquiredPrivileges.revokePrivilegesFromPrincipal(principal->getName());
         _authenticatedPrincipals.removeByDBName(dbname);
     }
 
-    Status AuthorizationManager::acquirePrivilege(const AcquiredPrivilege& privilege) {
-        const Principal* principal = privilege.getPrincipal();
-        if (!_authenticatedPrincipals.lookup(principal->getName())) {
+    PrincipalSet::NameIterator AuthorizationManager::getAuthenticatedPrincipalNames() {
+        return _authenticatedPrincipals.getNames();
+    }
+
+    Status AuthorizationManager::acquirePrivilege(const Privilege& privilege,
+                                                  const PrincipalName& authorizingPrincipal) {
+        if (!_authenticatedPrincipals.lookup(authorizingPrincipal)) {
             return Status(ErrorCodes::UserNotFound,
                           mongoutils::str::stream()
                                   << "No authenticated principle found with name: "
-                                  << principal->getName().getUser()
+                                  << authorizingPrincipal.getUser()
                                   << " from database "
-                                  << principal->getName().getDB(),
+                                  << authorizingPrincipal.getDB(),
                           0);
         }
-
-        _acquiredPrivileges.grantPrivilege(privilege);
-
+        _acquiredPrivileges.grantPrivilege(privilege, authorizingPrincipal);
         return Status::OK();
     }
 
@@ -224,17 +227,17 @@ namespace mongo {
         Principal* principal = new Principal(PrincipalName(principalName, "local"));
         ActionSet actions;
         actions.addAllActions();
-        AcquiredPrivilege privilege(Privilege("*", actions), principal);
 
         addAuthorizedPrincipal(principal);
-        Status status = acquirePrivilege(privilege);
-        verify(status.isOK());
+        fassert(16581, acquirePrivilege(Privilege(PrivilegeSet::WILDCARD_RESOURCE, actions),
+                                    principal->getName()).isOK());
     }
 
-    bool AuthorizationManager::hasInternalAuthorization() const {
+    bool AuthorizationManager::hasInternalAuthorization() {
         ActionSet allActions;
         allActions.addAllActions();
-        return _acquiredPrivileges.getPrivilegeForActions("*", allActions);
+        return _acquiredPrivileges.hasPrivilege(Privilege(PrivilegeSet::WILDCARD_RESOURCE,
+                                                          allActions));
     }
 
     ActionSet AuthorizationManager::getActionsForOldStyleUser(const std::string& dbname,
@@ -264,28 +267,28 @@ namespace mongo {
     }
 
     Status AuthorizationManager::acquirePrivilegesFromPrivilegeDocument(
-            const std::string& dbname, Principal* principal, const BSONObj& privilegeDocument) {
-        if (!_authenticatedPrincipals.lookup(principal->getName())) {
+            const std::string& dbname, const PrincipalName& principal, const BSONObj& privilegeDocument) {
+        if (!_authenticatedPrincipals.lookup(principal)) {
             return Status(ErrorCodes::UserNotFound,
                           mongoutils::str::stream()
                                   << "No authenticated principle found with name: "
-                                  << principal->getName().getUser()
+                                  << principal.getUser()
                                   << " from database "
-                                  << principal->getName().getDB(),
+                                  << principal.getDB(),
                           0);
         }
-        if (principal->getName().getUser() == internalSecurity.user) {
+        if (principal.getUser() == internalSecurity.user) {
             // Grant full access to internal user
             ActionSet allActions;
             allActions.addAllActions();
-            AcquiredPrivilege privilege(Privilege(WILDCARD_DBNAME, allActions), principal);
-            return acquirePrivilege(privilege);
+            return acquirePrivilege(Privilege(PrivilegeSet::WILDCARD_RESOURCE, allActions),
+                                    principal);
         }
         return buildPrivilegeSet(dbname, principal, privilegeDocument, &_acquiredPrivileges);
     }
 
     Status AuthorizationManager::buildPrivilegeSet(const std::string& dbname,
-                                                   Principal* principal,
+                                                   const PrincipalName& principal,
                                                    const BSONObj& privilegeDocument,
                                                    PrivilegeSet* result) {
         if (!privilegeDocument.hasField("privileges")) {
@@ -305,7 +308,7 @@ namespace mongo {
 
     Status AuthorizationManager::_buildPrivilegeSetFromOldStylePrivilegeDocument(
             const std::string& dbname,
-            Principal* principal,
+            const PrincipalName& principal,
             const BSONObj& privilegeDocument,
             PrivilegeSet* result) {
         if (!(privilegeDocument.hasField("user") && privilegeDocument.hasField("pwd"))) {
@@ -315,12 +318,12 @@ namespace mongo {
                                    << privilegeDocument,
                           0);
         }
-        if (privilegeDocument["user"].str() != principal->getName().getUser()) {
+        if (privilegeDocument["user"].str() != principal.getUser()) {
             return Status(ErrorCodes::BadValue,
                           mongoutils::str::stream() << "Principal name from privilege document \""
                                   << privilegeDocument["user"].str()
                                   << "\" doesn't match name of provided Principal \""
-                                  << principal->getName().getUser()
+                                  << principal.getUser()
                                   << "\"",
                           0);
         }
@@ -329,39 +332,26 @@ namespace mongo {
                 privilegeDocument["readOnly"].trueValue();
         ActionSet actions = getActionsForOldStyleUser(dbname, readOnly);
         std::string resourceName = (dbname == ADMIN_DBNAME || dbname == LOCAL_DBNAME) ?
-                WILDCARD_DBNAME : dbname;
-        result->grantPrivilege(AcquiredPrivilege(Privilege(resourceName, actions), principal));
+            PrivilegeSet::WILDCARD_RESOURCE : dbname;
+        result->grantPrivilege(Privilege(resourceName, actions), principal);
 
         return Status::OK();
     }
 
     bool AuthorizationManager::checkAuthorization(const std::string& resource,
-                                                  ActionType action) const {
+                                                  ActionType action) {
+        if (_externalState->shouldIgnoreAuthChecks())
+            return true;
 
-        if (_externalState->shouldIgnoreAuthChecks()) {
-            return true;
-        }
-
-        if (_acquiredPrivileges.getPrivilegeForAction(nsToDatabase(resource), action))
-            return true;
-        if (_acquiredPrivileges.getPrivilegeForAction(WILDCARD_DBNAME, action))
-            return true;
-        return false;
+        return _acquiredPrivileges.hasPrivilege(Privilege(nsToDatabase(resource), action));
     }
 
     bool AuthorizationManager::checkAuthorization(const std::string& resource,
-                                                  ActionSet actions) const {
-
-        if (_externalState->shouldIgnoreAuthChecks()) {
-            return true;
-        }
-
-        if (_acquiredPrivileges.getPrivilegeForActions(nsToDatabase(resource), actions))
-            return true;
-        if (_acquiredPrivileges.getPrivilegeForActions(WILDCARD_DBNAME, actions))
+                                                  ActionSet actions) {
+        if (_externalState->shouldIgnoreAuthChecks())
             return true;
 
-        return false;
+        return _acquiredPrivileges.hasPrivilege(Privilege(nsToDatabase(resource), actions));
     }
 
     Status AuthorizationManager::checkAuthForQuery(const std::string& ns) {

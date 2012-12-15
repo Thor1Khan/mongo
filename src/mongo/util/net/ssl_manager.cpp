@@ -103,13 +103,15 @@ namespace mongo {
     
     ////////////////////////////////////////////////////////////////
 
-    SSLManager::SSLManager(std::string pemfile,
-                           std::string pempwd,
-                           std::string cafile) : 
-        _validateCertificates(false) {
+    SSLManager::SSLManager(const SSLParams& params) : 
+        _validateCertificates(false),
+        _forceValidation(params.forceCertificateValidation) {
         SSL_library_init();
         SSL_load_error_strings();
         ERR_load_crypto_strings();
+        // Add all digests and ciphers to OpenSSL's internal table
+        // so that encryption/decryption is backwards compatible
+        OpenSSL_add_all_algorithms();
         
         _context = SSL_CTX_new(SSLv23_method());
         massert(15864, 
@@ -127,15 +129,20 @@ namespace mongo {
         SSLThreadInfo::init();
         SSLThreadInfo::get();
 
-        if (!pemfile.empty()) {
-            if (!_setupPEM(pemfile, pempwd)) {
+        if (!params.pemfile.empty()) {
+            if (!_setupPEM(params.pemfile, params.pempwd)) {
                 uasserted(16562, "ssl initialization problem"); 
             }
         }
-        if (!cafile.empty()) {
+        if (!params.cafile.empty()) {
             // Set up certificate validation with a certificate authority
-            if (!_setupCA(cafile)) {
+            if (!_setupCA(params.cafile)) {
                 uasserted(16563, "ssl initialization problem"); 
+            }
+        }
+        if (!params.crlfile.empty()) {
+            if (!_setupCRL(params.crlfile)) {
+                uasserted(16582, "ssl initialization problem");
             }
         }
     }
@@ -155,7 +162,7 @@ namespace mongo {
         _password = password;
         
         if ( SSL_CTX_use_certificate_chain_file( _context , keyFile.c_str() ) != 1 ) {
-            log() << "Can't read certificate file: " << keyFile << " " <<
+            error() << "cannot read certificate file: " << keyFile << ' ' <<
                 _getSSLErrorMessage(ERR_get_error()) << endl;
             return false;
         }
@@ -164,14 +171,15 @@ namespace mongo {
         SSL_CTX_set_default_passwd_cb( _context, &SSLManager::password_cb );
         
         if ( SSL_CTX_use_PrivateKey_file( _context , keyFile.c_str() , SSL_FILETYPE_PEM ) != 1 ) {
-            log() << "Can't read key file: " << keyFile << " " <<
+            error() << "cannot read key file: " << keyFile << ' ' <<
                 _getSSLErrorMessage(ERR_get_error()) << endl;
             return false;
         }
         
         // Verify that the certificate and the key go together.
         if (SSL_CTX_check_private_key(_context) != 1) {
-            log() << "SSL certificate validation: " << _getSSLErrorMessage(ERR_get_error()) << endl;
+            error() << "SSL certificate validation: " << _getSSLErrorMessage(ERR_get_error()) 
+                    << endl;
             return false;
         }
         return true;
@@ -180,7 +188,7 @@ namespace mongo {
     bool SSLManager::_setupCA(const std::string& caFile) {
         // Load trusted CA
         if (SSL_CTX_load_verify_locations(_context, caFile.c_str(), NULL) != 1) {
-            log() << "Can't read certificate authority file: " << caFile << " " <<
+            error() << "cannot read certificate authority file: " << caFile << " " <<
                 _getSSLErrorMessage(ERR_get_error()) << endl;
             return false;
         }
@@ -188,6 +196,26 @@ namespace mongo {
         // if a certificate is presented
         SSL_CTX_set_verify(_context, SSL_VERIFY_PEER, &SSLManager::verify_cb);
         _validateCertificates = true;
+        return true;
+    }
+
+    bool SSLManager::_setupCRL(const std::string& crlFile) {
+        X509_STORE *store = SSL_CTX_get_cert_store(_context);
+        fassert(16583, store);
+        
+        X509_STORE_set_flags(store, X509_V_FLAG_CRL_CHECK);
+        X509_LOOKUP *lookup = X509_STORE_add_lookup(store, X509_LOOKUP_file());
+        fassert(16584, lookup);
+
+        int status = X509_load_crl_file(lookup, crlFile.c_str(), X509_FILETYPE_PEM);
+        if (status == 0) {
+            error() << "cannot read CRL file: " << crlFile << ' ' <<
+                _getSSLErrorMessage(ERR_get_error()) << endl;
+            return false;
+        }
+        log() << "ssl imported " << status << " revoked certificate" << 
+            ((status == 1) ? "" : "s") << " from the revocation list." << 
+            endl;
         return true;
     }
                 
@@ -231,9 +259,13 @@ namespace mongo {
         X509* cert = SSL_get_peer_certificate(ssl);
 
         if (cert == NULL) { // no certificate presented by peer
-            // TODO: if force_validation, throw an exception
-            // else
-            log() << "no SSL certificate provided by peer" << endl;
+            if (_forceValidation) {
+                error() << "no SSL certificate provided by peer; connection rejected" << endl;
+                throw SocketException(SocketException::CONNECT_ERROR, "");
+            }
+            else {
+                error() << "no SSL certificate provided by peer" << endl;
+            }
             return;
         }
         ON_BLOCK_EXIT(X509_free, cert);
@@ -247,7 +279,6 @@ namespace mongo {
         }
 
         // TODO: check optional cipher restriction, using cert.
-        // TODO: enforce CRL?
     }
 
     std::string SSLManager::_getSSLErrorMessage(int code) {
@@ -264,33 +295,33 @@ namespace mongo {
         case SSL_ERROR_WANT_READ:
         case SSL_ERROR_WANT_WRITE:
             // should not happen because we turned on AUTO_RETRY
-            log() << "SSL error" << endl;
+            error() << "SSL error" << endl;
             throw SocketException(SocketException::CONNECT_ERROR, "");
             break;
 
         case SSL_ERROR_SYSCALL:
             if (code < 0) {
-                log() << "socket error: " << errnoWithDescription() << endl;
+                error() << "socket error: " << errnoWithDescription() << endl;
                 throw SocketException(SocketException::CONNECT_ERROR, "");
             }
-            log() << "could not negotiate SSL connection: EOF detected" << endl;
+            error() << "could not negotiate SSL connection: EOF detected" << endl;
             throw SocketException(SocketException::CONNECT_ERROR, "");
             break;
 
         case SSL_ERROR_SSL:
         {
             int ret = ERR_get_error();
-            log() << _getSSLErrorMessage(ret) << endl;
+            error() << _getSSLErrorMessage(ret) << endl;
             throw SocketException(SocketException::CONNECT_ERROR, "");
             break;
         }
         case SSL_ERROR_ZERO_RETURN:
-            log() << "could not negotiate SSL connection: EOF detected" << endl;
+            error() << "could not negotiate SSL connection: EOF detected" << endl;
             throw SocketException(SocketException::CONNECT_ERROR, "");
             break;
         
         default:
-            log() << "unrecognized SSL error" << endl;
+            error() << "unrecognized SSL error" << endl;
             throw SocketException(SocketException::CONNECT_ERROR, "");
             break;
         }
