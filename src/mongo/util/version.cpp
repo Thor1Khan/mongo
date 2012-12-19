@@ -15,25 +15,28 @@
  *    limitations under the License.
  */
 
-#include "pch.h"
+
 #include <cstdlib>
 #include <iostream>
 #include <iomanip>
 #include <sstream>
 #include <string>
 #include <fstream>
-#include "mongo/util/startup_test.h"
-#include "mongo/scripting/engine.h"
-#include "version.h"
-#include "stringutils.h"
-#include "../db/jsobj.h"
-#include "file.h"
-#include "ramlog.h"
-#include "../db/cmdline.h"
-#include "processinfo.h"
-#include "mongo/db/pdfile.h"
 
 #include <boost/filesystem/operations.hpp>
+
+#include "mongo/base/parse_number.h"
+#include "mongo/db/cmdline.h"
+#include "mongo/db/jsobj.h"
+#include "mongo/db/pdfile.h"
+//#include "mongo/scripting/engine.h"
+#include "mongo/util/file.h"
+#include "mongo/util/processinfo.h"
+#include "mongo/util/ramlog.h"
+#include "mongo/util/startup_test.h"
+#include "mongo/util/stringutils.h"
+#include "mongo/util/version.h"
+
 
 namespace mongo {
 
@@ -59,23 +62,23 @@ namespace mongo {
                 continue;
             }
 
-            try {
-                unsigned num = stringToNum(curPart.c_str());
-                b.append((int) num);
+            int num;
+            if ( parseNumberFromString( curPart, &num ).isOK() ) {
+                b.append(num);
             }
-            catch (...){ // not a number
-                if (curPart.empty()){
-                    verify(*c == '\0');
-                    break;
-                }
-                else if (startsWith(curPart, "rc")){
-                    finalPart = -10 + stringToNum(curPart.c_str()+2);
-                    break;
-                }
-                else if (curPart == "pre"){
-                    finalPart = -100;
-                    break;
-                }
+            else if (curPart.empty()){
+                verify(*c == '\0');
+                break;
+            }
+            else if (startsWith(curPart, "rc")){
+                num = 0;
+                verify( parseNumberFromString( curPart.substr(2), &num ).isOK() );
+                finalPart = -10 + num;
+                break;
+            }
+            else if (curPart == "pre"){
+                finalPart = -100;
+                break;
             }
 
             curPart = "";
@@ -131,18 +134,18 @@ namespace mongo {
     }
 
     void appendBuildInfo(BSONObjBuilder& result) {
-	   result << "version" << versionString
-			  << "gitVersion" << gitVersion()
-			  << "sysInfo" << sysInfo()
-			  << "loaderFlags" << loaderFlags()
-			  << "compilerFlags" << compilerFlags()
-			  << "allocator" << allocator()
-			  << "versionArray" << versionArray
-			  << "interpreterVersion" << globalScriptEngine->getInterpreterVersionString()
-			  << "bits" << ( sizeof( int* ) == 4 ? 32 : 64 );
-	   result.appendBool( "debug" , debug );
-	   result.appendNumber("maxBsonObjectSize", BSONObjMaxUserSize);
-   }
+       result << "version" << versionString
+              << "gitVersion" << gitVersion()
+              << "sysInfo" << sysInfo()
+              << "loaderFlags" << loaderFlags()
+              << "compilerFlags" << compilerFlags()
+              << "allocator" << allocator()
+              << "versionArray" << versionArray
+//              << "interpreterVersion" << globalScriptEngine->getInterpreterVersionString()
+              << "bits" << ( sizeof( int* ) == 4 ? 32 : 64 );
+       result.appendBool( "debug" , debug );
+       result.appendNumber("maxBsonObjectSize", BSONObjMaxUserSize);
+    }
 
 
     Tee* const startupWarningsLog = new RamLog("startupWarnings"); //intentionally leaked
