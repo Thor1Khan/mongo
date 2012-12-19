@@ -778,6 +778,9 @@ if not use_system_version_of_library("boost"):
                 CPPDEFINES=['BOOST_ALL_NO_LIB'])
 else:
     env.Prepend(CPPDEFINES=['BOOST_ALL_DYN_LINK'])
+
+env.Prepend(CPPPATH=['$BUILD_DIR/third_party/s2'])
+
 env.Append( CPPPATH=['$EXTRACPPPATH'],
             LIBPATH=['$EXTRALIBPATH'] )
 

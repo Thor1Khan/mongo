@@ -240,7 +240,10 @@ namespace mongo {
         virtual shared_ptr<Cursor> newCursor(const BSONObj& query, const BSONObj& order,
                                              int numWanted) const;
 
-        virtual IndexSuitability suitability(const BSONObj& query, const BSONObj& order) const {
+        virtual IndexSuitability suitability( const FieldRangeSet& queryConstraints ,
+                                              const BSONObj& order ) const {
+            BSONObj query = queryConstraints.originalQuery();
+
             BSONElement e = query.getFieldDotted(_geo.c_str());
             switch (e.type()) {
             case Object: {
@@ -1071,8 +1074,8 @@ namespace mongo {
                     _expPrefix.reset(new GeoHash(_prefix));
 
                     // Find points inside this prefix
-                    while (_min.checkAndAdvance(_prefix, _foundInExp, this) && _foundInExp < maxFound && _found < maxAdded);
-                    while (_max.checkAndAdvance(_prefix, _foundInExp, this) && _foundInExp < maxFound && _found < maxAdded);
+                    while (_min.checkAndAdvance(_prefix, _foundInExp, this) && _foundInExp < maxFound && _found < maxAdded) {}
+                    while (_max.checkAndAdvance(_prefix, _foundInExp, this) && _foundInExp < maxFound && _found < maxAdded) {}
 
 #ifdef GEODEBUGGING
 
@@ -2373,9 +2376,11 @@ namespace mongo {
         Geo2dType * g = (Geo2dType*)id.getSpec().getType();
         verify(&id == g->getDetails());
 
+        // We support both "num" and "limit" options to control limit
         int numWanted = 100;
-        if (cmdObj["num"].isNumber()) {
-            numWanted = cmdObj["num"].numberInt();
+        const char* limitName = cmdObj["num"].isNumber() ? "num" : "limit";
+        if (cmdObj[limitName].isNumber()) {
+            numWanted = cmdObj[limitName].numberInt();
             verify(numWanted >= 0);
         }
 

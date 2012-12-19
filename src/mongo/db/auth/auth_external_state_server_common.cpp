@@ -17,29 +17,31 @@
 #include "mongo/db/auth/auth_external_state_server_common.h"
 
 #include "mongo/base/status.h"
+#include "mongo/db/auth/authorization_manager.h"
 #include "mongo/db/client.h"
 #include "mongo/util/debug_util.h"
 
 namespace mongo {
 
-    AuthExternalStateServerCommon::AuthExternalStateServerCommon() {}
+    AuthExternalStateServerCommon::AuthExternalStateServerCommon() : _allowLocalhost(false) {}
     AuthExternalStateServerCommon::~AuthExternalStateServerCommon() {}
 
-    bool AuthExternalStateServerCommon::_allowLocalhost() const {
-        bool allow = !_hasPrivilegeDocument("admin");
-        if (allow) {
+    void AuthExternalStateServerCommon::_checkShouldAllowLocalhost() {
+        if (noauth)
+            return;
+        // TODO: cache if admin user exists and if it once existed don't query admin.system.users
+        _allowLocalhost = !_hasPrivilegeDocument("admin");
+        if (_allowLocalhost) {
             ONCE {
                 log() << "note: no users configured in admin.system.users, allowing localhost "
                         "access" << std::endl;
             }
         }
-        return allow;
     }
 
     bool AuthExternalStateServerCommon::shouldIgnoreAuthChecks() const {
-        // TODO: cache if admin user exists and if it once existed don't query admin.system.users
         ClientBasic* client = ClientBasic::getCurrent();
-        return noauth || (client->getIsLocalHostConnection() && _allowLocalhost());
+        return noauth || (client->getIsLocalHostConnection() && _allowLocalhost);
     }
 
 } // namespace mongo

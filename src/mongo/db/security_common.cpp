@@ -36,14 +36,11 @@
 #include "security_common.h"
 #include "commands.h"
 #include "../util/md5.hpp"
-#include "client_common.h"
+#include "client_basic.h"
 #include "mongo/client/dbclientinterface.h"
 
 
 namespace mongo {
-
-    // this is a config setting, set at startup and not changing after initialization.
-    bool noauth = true;
 
     bool setUpSecurityKey(const string& filename) {
         struct stat stats;

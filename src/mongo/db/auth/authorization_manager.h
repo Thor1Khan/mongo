@@ -32,6 +32,9 @@
 
 namespace mongo {
 
+    // --noauth cmd line option
+    extern bool noauth;
+
     /**
      * Internal secret key info.
      */
@@ -59,6 +62,11 @@ namespace mongo {
         // Takes ownership of the externalState.
         explicit AuthorizationManager(AuthExternalState* externalState);
         ~AuthorizationManager();
+
+        // Should be called at the beginning of every new request.  This performs the checks
+        // necessary to determine if localhost connections should be given full access.
+        // TODO: try to eliminate the need for this call.
+        void startRequest();
 
         // Takes ownership of the principal (by putting into _authenticatedPrincipals).
         void addAuthorizedPrincipal(Principal* principal);
@@ -148,6 +156,17 @@ namespace mongo {
         // Parses the old-style (pre 2.4) privilege document and returns a PrivilegeSet of all the
         // Privileges that the privilege document grants.
         static Status _buildPrivilegeSetFromOldStylePrivilegeDocument(
+                const std::string& dbname,
+                const PrincipalName& principal,
+                const BSONObj& privilegeDocument,
+                PrivilegeSet* result);
+
+        // Parses extended-form (2.4+) privilege documents and returns a PrivilegeSet of all the
+        // privileges that the document grants.
+        //
+        // The document, "privilegeDocument", is assumed to describe privileges for "principal", and
+        // to come from database "dbname".
+        static Status _buildPrivilegeSetFromExtendedPrivilegeDocument(
                 const std::string& dbname,
                 const PrincipalName& principal,
                 const BSONObj& privilegeDocument,
