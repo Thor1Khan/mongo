@@ -29,6 +29,7 @@
 #include "mongo/db/auth/privilege.h"
 #include "mongo/db/auth/privilege_set.h"
 #include "mongo/db/client.h"
+#include "mongo/db/jsobj.h"
 #include "mongo/db/namespacestring.h"
 #include "mongo/db/security_common.h"
 #include "mongo/util/mongoutils/str.h"
@@ -95,6 +96,7 @@ namespace {
         // Read role
         // TODO: Remove OLD_READ once commands require the proper actions
         readRoleActions.addAction(ActionType::oldRead);
+        readRoleActions.addAction(ActionType::cloneCollectionLocalSource);
         readRoleActions.addAction(ActionType::collStats);
         readRoleActions.addAction(ActionType::dbHash);
         readRoleActions.addAction(ActionType::dbStats);
@@ -104,14 +106,16 @@ namespace {
         readWriteRoleActions.addAllActionsFromSet(readRoleActions);
         // TODO: Remove OLD_WRITE once commands require the proper actions
         readWriteRoleActions.addAction(ActionType::oldWrite);
+        readWriteRoleActions.addAction(ActionType::cloneCollectionTarget);
         readWriteRoleActions.addAction(ActionType::convertToCapped);
-        readWriteRoleActions.addAction(ActionType::createCollection); // TODO: should db admin get this also?
+        readWriteRoleActions.addAction(ActionType::createCollection); // db admin gets this also
         readWriteRoleActions.addAction(ActionType::dropCollection);
         readWriteRoleActions.addAction(ActionType::dropIndexes);
         readWriteRoleActions.addAction(ActionType::emptycapped);
         readWriteRoleActions.addAction(ActionType::ensureIndex);
         readWriteRoleActions.addAction(ActionType::insert);
         readWriteRoleActions.addAction(ActionType::remove);
+        readWriteRoleActions.addAction(ActionType::renameCollectionSameDB); // db admin gets this also
         readWriteRoleActions.addAction(ActionType::update);
 
         // User admin role
@@ -123,12 +127,15 @@ namespace {
         dbAdminRoleActions.addAction(ActionType::collStats);
         dbAdminRoleActions.addAction(ActionType::compact);
         dbAdminRoleActions.addAction(ActionType::convertToCapped);
+        dbAdminRoleActions.addAction(ActionType::createCollection); // read_write gets this also
         dbAdminRoleActions.addAction(ActionType::dbStats);
         dbAdminRoleActions.addAction(ActionType::dropCollection);
+        dbAdminRoleActions.addAction(ActionType::indexStats);
         dbAdminRoleActions.addAction(ActionType::profileEnable);
         dbAdminRoleActions.addAction(ActionType::profileRead);
         dbAdminRoleActions.addAction(ActionType::reIndex); // TODO: Should readWrite have this also? This isn't consistent with ENSURE_INDEX and DROP_INDEXES
-        dbAdminRoleActions.addAction(ActionType::renameCollection);
+        dbAdminRoleActions.addAction(ActionType::renameCollectionSameDB); // read_write gets this also
+        dbAdminRoleActions.addAction(ActionType::storageDetails);
         dbAdminRoleActions.addAction(ActionType::validate);
 
         // Server admin role
@@ -212,11 +219,135 @@ namespace {
         return Status::OK();
     }
 
+    static inline Status _badValue(const char* reason, int location) {
+        return Status(ErrorCodes::BadValue, reason, location);
+    }
+
+    static inline Status _badValue(const std::string& reason, int location) {
+        return Status(ErrorCodes::BadValue, reason, location);
+    }
+
+    static inline StringData makeStringDataFromBSONElement(const BSONElement& element) {
+        return StringData(element.valuestr(), element.valuestrsize() - 1);
+    }
+
+    static Status _checkRolesArray(const BSONElement& rolesElement) {
+        if (rolesElement.type() != Array) {
+            return _badValue("Role fields must be an array when present in  system.users entries",
+                             0);
+        }
+        for (BSONObjIterator iter(rolesElement.embeddedObject()); iter.more(); iter.next()) {
+            BSONElement element = *iter;
+            if (element.type() != String || makeStringDataFromBSONElement(element).empty()) {
+                return _badValue("Roles must be non-empty strings.", 0);
+            }
+        }
+        return Status::OK();
+    }
+
+    Status AuthorizationManager::checkValidPrivilegeDocument(const StringData& dbname,
+                                                             const BSONObj& doc) {
+        BSONElement userElement = doc[USERNAME_FIELD_NAME];
+        BSONElement userSourceElement = doc[USERSOURCE_FIELD_NAME];
+        BSONElement passwordElement = doc[PASSWORD_FIELD_NAME];
+        BSONElement rolesElement = doc[ROLES_FIELD_NAME];
+        BSONElement otherDBRolesElement = doc[OTHER_DB_ROLES_FIELD_NAME];
+        BSONElement readOnlyElement = doc[READONLY_FIELD_NAME];
+
+        // Validate the "user" element.
+        if (userElement.type() != String)
+            return _badValue("system.users entry needs 'user' field to be a string", 14051);
+        if (makeStringDataFromBSONElement(userElement).empty())
+            return _badValue("system.users entry needs 'user' field to be non-empty", 14053);
+
+        // Must set exactly one of "userSource" and "pwd" fields.
+        if (userSourceElement.eoo() == passwordElement.eoo()) {
+            return _badValue("system.users entry must have either a 'pwd' field or a 'userSource' "
+                             "field, but not both", 0);
+        }
+
+        // Cannot have both "roles" and "readOnly" elements.
+        if (!rolesElement.eoo() && !readOnlyElement.eoo()) {
+            return _badValue("system.users entry must not have both 'roles' and 'readOnly' fields",
+                             0);
+        }
+
+        // Validate the "pwd" element, if present.
+        if (!passwordElement.eoo()) {
+            if (passwordElement.type() != String)
+                return _badValue("system.users entry needs 'pwd' field to be a string", 14052);
+            if (makeStringDataFromBSONElement(passwordElement).empty())
+                return _badValue("system.users entry needs 'pwd' field to be non-empty", 14054);
+        }
+
+        // Validate the "userSource" element, if present.
+        if (!userSourceElement.eoo()) {
+            if (userSourceElement.type() != String ||
+                makeStringDataFromBSONElement(userSourceElement).empty()) {
+
+                return _badValue("system.users entry needs 'userSource' field to be a non-empty "
+                                 "string, if present", 0);
+            }
+            if (userSourceElement.str() == dbname) {
+                return _badValue(mongoutils::str::stream() << "'" << dbname <<
+                                 "' is not a valid value for the userSource field in " <<
+                                 dbname << ".system.users entries",
+                                 0);
+            }
+            if (rolesElement.eoo()) {
+                return _badValue("system.users entry needs 'roles' field if 'userSource' field "
+                                 "is present.", 0);
+            }
+        }
+
+        // Validate the "roles" element.
+        if (!rolesElement.eoo()) {
+            Status status = _checkRolesArray(rolesElement);
+            if (!status.isOK())
+                return status;
+        }
+
+        if (!otherDBRolesElement.eoo()) {
+            if (dbname != ADMIN_DBNAME) {
+                return _badValue("Only admin.system.users entries may contain 'otherDBRoles' "
+                                 "fields", 0);
+            }
+            if (rolesElement.eoo()) {
+                return _badValue("system.users entries with 'otherDBRoles' fields must contain "
+                                 "'roles' fields", 0);
+            }
+            if (otherDBRolesElement.type() != Object) {
+                return _badValue("'otherDBRoles' field must be an object when present in "
+                                 "system.users entries", 0);
+            }
+            for (BSONObjIterator iter(otherDBRolesElement.embeddedObject());
+                 iter.more(); iter.next()) {
+
+                Status status = _checkRolesArray(*iter);
+                if (!status.isOK())
+                    return status;
+            }
+        }
+
+        return Status::OK();
+    }
+
     AuthorizationManager::AuthorizationManager(AuthExternalState* externalState) {
         _externalState.reset(externalState);
     }
 
     AuthorizationManager::~AuthorizationManager(){}
+
+    ActionSet AuthorizationManager::getAllUserActions() {
+        ActionSet allActions;
+        allActions.addAllActionsFromSet(readRoleActions);
+        allActions.addAllActionsFromSet(readWriteRoleActions);
+        allActions.addAllActionsFromSet(userAdminRoleActions);
+        allActions.addAllActionsFromSet(dbAdminRoleActions);
+        allActions.addAllActionsFromSet(serverAdminRoleActions);
+        allActions.addAllActionsFromSet(clusterAdminRoleActions);
+        return allActions;
+    }
 
     void AuthorizationManager::startRequest() {
         _externalState->startRequest();
@@ -511,114 +642,56 @@ namespace {
 
     bool AuthorizationManager::checkAuthorization(const std::string& resource,
                                                   ActionType action) {
-        if (_externalState->shouldIgnoreAuthChecks())
-            return true;
-
-        return _acquiredPrivileges.hasPrivilege(Privilege(nsToDatabase(resource), action));
+        return checkAuthForPrivilege(Privilege(resource, action)).isOK();
     }
 
     bool AuthorizationManager::checkAuthorization(const std::string& resource,
                                                   ActionSet actions) {
-        if (_externalState->shouldIgnoreAuthChecks())
-            return true;
-
-        return _acquiredPrivileges.hasPrivilege(Privilege(nsToDatabase(resource), actions));
+        return checkAuthForPrivilege(Privilege(resource, actions)).isOK();
     }
 
     Status AuthorizationManager::checkAuthForQuery(const std::string& ns) {
         NamespaceString namespaceString(ns);
         verify(!namespaceString.isCommand());
-        if (namespaceString.coll == "system.users") {
-            if (!checkAuthorization(ns, ActionType::userAdmin)) {
-                return Status(ErrorCodes::Unauthorized,
-                              mongoutils::str::stream() <<
-                                      "unauthorized to read user information for database " <<
-                                      namespaceString.db,
-                              0);
-            }
-        }
-        else if (namespaceString.coll == "system.profile") {
-            if (!checkAuthorization(ns, ActionType::profileRead)) {
-                return Status(ErrorCodes::Unauthorized,
-                              mongoutils::str::stream() << "unauthorized to read " <<
-                                      namespaceString.db << ".system.profile",
-                              0);
-            }
-        }
-        else {
-            if (!checkAuthorization(ns, ActionType::find)) {
-                return Status(ErrorCodes::Unauthorized,
-                              mongoutils::str::stream() << "unauthorized for query on " << ns,
-                              0);
-            }
+        if (!checkAuthorization(ns, ActionType::find)) {
+            return Status(ErrorCodes::Unauthorized,
+                          mongoutils::str::stream() << "not authorized for query on " << ns,
+                          0);
         }
         return Status::OK();
     }
 
     Status AuthorizationManager::checkAuthForInsert(const std::string& ns) {
         NamespaceString namespaceString(ns);
-        if (namespaceString.coll == "system.users") {
-            if (!checkAuthorization(ns, ActionType::userAdmin)) {
-                return Status(ErrorCodes::Unauthorized,
-                              mongoutils::str::stream() <<
-                                      "unauthorized to create user for database " <<
-                                      namespaceString.db,
-                              0);
-            }
-        }
-        else {
-            if (!checkAuthorization(ns, ActionType::insert)) {
-                return Status(ErrorCodes::Unauthorized,
-                              mongoutils::str::stream() << "unauthorized for insert on " << ns,
-                              0);
-            }
+        if (!checkAuthorization(ns, ActionType::insert)) {
+            return Status(ErrorCodes::Unauthorized,
+                          mongoutils::str::stream() << "not authorized for insert on " << ns,
+                          0);
         }
         return Status::OK();
     }
 
     Status AuthorizationManager::checkAuthForUpdate(const std::string& ns, bool upsert) {
         NamespaceString namespaceString(ns);
-        if (namespaceString.coll == "system.users") {
-            if (!checkAuthorization(ns, ActionType::userAdmin)) {
-                return Status(ErrorCodes::Unauthorized,
-                              mongoutils::str::stream() <<
-                                      "not authorized to update user information for database " <<
-                                      namespaceString.db,
-                              0);
-            }
+        if (!checkAuthorization(ns, ActionType::update)) {
+            return Status(ErrorCodes::Unauthorized,
+                          mongoutils::str::stream() << "not authorized for update on " << ns,
+                          0);
         }
-        else {
-            if (!checkAuthorization(ns, ActionType::update)) {
-                return Status(ErrorCodes::Unauthorized,
-                              mongoutils::str::stream() << "not authorized for update on " << ns,
-                              0);
-            }
-            if (upsert && !checkAuthorization(ns, ActionType::insert)) {
-                return Status(ErrorCodes::Unauthorized,
-                              mongoutils::str::stream() << "not authorized for upsert on " << ns,
-                              0);
-            }
+        if (upsert && !checkAuthorization(ns, ActionType::insert)) {
+            return Status(ErrorCodes::Unauthorized,
+                          mongoutils::str::stream() << "not authorized for upsert on " << ns,
+                          0);
         }
         return Status::OK();
     }
 
     Status AuthorizationManager::checkAuthForDelete(const std::string& ns) {
         NamespaceString namespaceString(ns);
-        if (namespaceString.coll == "system.users") {
-            if (!checkAuthorization(ns, ActionType::userAdmin)) {
-                return Status(ErrorCodes::Unauthorized,
-                              mongoutils::str::stream() <<
-                                      "not authorized to remove user from database " <<
-                                      namespaceString.db,
-                              0);
-            }
-        }
-        else {
-            if (!checkAuthorization(ns, ActionType::remove)) {
-                return Status(ErrorCodes::Unauthorized,
-                              mongoutils::str::stream() << "not authorized to remove from " << ns,
-                              0);
-            }
+        if (!checkAuthorization(ns, ActionType::remove)) {
+            return Status(ErrorCodes::Unauthorized,
+                          mongoutils::str::stream() << "not authorized to remove from " << ns,
+                          0);
         }
         return Status::OK();
     }
@@ -627,14 +700,48 @@ namespace {
         return checkAuthForQuery(ns);
     }
 
-    Status AuthorizationManager::checkAuthForPrivileges(const vector<Privilege>& privileges) {
-        for (std::vector<Privilege>::const_iterator it = privileges.begin();
-                it != privileges.end(); ++it) {
-            const Privilege& privilege = *it;
-            if (!checkAuthorization(privilege.getResource(), privilege.getActions())) {
-                return Status(ErrorCodes::Unauthorized, "unauthorized", 0);
-            }
+    Privilege AuthorizationManager::_modifyPrivilegeForSpecialCases(const Privilege& privilege) {
+        ActionSet newActions;
+        newActions.addAllActionsFromSet(privilege.getActions());
+        std::string collectionName = NamespaceString(privilege.getResource()).coll;
+        if (collectionName == "system.users") {
+            newActions.removeAction(ActionType::find);
+            newActions.removeAction(ActionType::insert);
+            newActions.removeAction(ActionType::update);
+            newActions.removeAction(ActionType::remove);
+            newActions.addAction(ActionType::userAdmin);
+        } else if (collectionName == "system.profle" && newActions.contains(ActionType::find)) {
+            newActions.removeAction(ActionType::find);
+            newActions.addAction(ActionType::profileRead);
         }
+
+        return Privilege(privilege.getResource(), newActions);
+    }
+
+    Status AuthorizationManager::checkAuthForPrivilege(const Privilege& privilege) {
+        if (_externalState->shouldIgnoreAuthChecks())
+            return Status::OK();
+
+        Privilege modifiedPrivilege = _modifyPrivilegeForSpecialCases(privilege);
+        if (!_acquiredPrivileges.hasPrivilege(modifiedPrivilege))
+            return Status(ErrorCodes::Unauthorized, "unauthorized", 0);
+
+        return Status::OK();
+    }
+
+    Status AuthorizationManager::checkAuthForPrivileges(const vector<Privilege>& privileges) {
+        if (_externalState->shouldIgnoreAuthChecks())
+            return Status::OK();
+
+        vector<Privilege> modifiedPrivileges;
+        for (vector<Privilege>::const_iterator it = privileges.begin(); it != privileges.end();
+                ++it) {
+            modifiedPrivileges.push_back(_modifyPrivilegeForSpecialCases(*it));
+        }
+
+        if (!_acquiredPrivileges.hasPrivileges(modifiedPrivileges))
+            return Status(ErrorCodes::Unauthorized, "unauthorized", 0);
+
         return Status::OK();
     }
 

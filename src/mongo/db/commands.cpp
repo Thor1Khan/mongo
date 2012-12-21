@@ -184,26 +184,20 @@ namespace mongo {
         bool have_ok = tmp.hasField("ok");
         bool have_errmsg = tmp.hasField("errmsg");
 
+        std::string lastErrorMsg = errmsg;
+        if (have_errmsg) {
+            lastErrorMsg = tmp["errmsg"].String();
+        }
+
         if (!have_ok)
             result.append( "ok" , ok ? 1.0 : 0.0 );
 
-        if ( !ok && !have_errmsg) {
-            result.append("errmsg", errmsg);
+        if (!ok) {
+            if (!have_errmsg) {
+                result.append("errmsg", errmsg);
+            }
+            setLastError(0, lastErrorMsg.c_str());
         }
-    }
-
-    // TODO: remove this default implementation so that all Command subclasses have to explicitly
-    // declare their own.
-    void Command::addRequiredPrivileges(const std::string& dbname,
-                                        const BSONObj& cmdObj,
-                                        std::vector<Privilege>* out) {
-        if (!requiresAuth()) {
-            return;
-        }
-        ActionSet actions;
-        actions.addAction(locktype() == WRITE ? ActionType::oldWrite : ActionType::oldRead);
-        Privilege privilege(adminOnly() ? "admin" : dbname, actions);
-        out->push_back(privilege);
     }
 
     void Command::logIfSlow( const Timer& timer, const string& msg ) {

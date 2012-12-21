@@ -83,10 +83,6 @@ namespace mongo {
                 s->created++;
                 c.reset( shardConnectionPool.get( addr ) );
             }
-            if ( !noauth ) {
-                c->setAuthenticationTable( ClientBasic::getCurrent()->getAuthenticationInfo()->
-                                           getAuthTable() );
-            }
             return c.release();
         }
 
@@ -171,7 +167,6 @@ namespace mongo {
         }
 
         void release( const string& addr , DBClientBase * conn ) {
-            conn->clearAuthenticationTable();
             shardConnectionPool.release( addr , conn );
         }
 

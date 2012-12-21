@@ -569,8 +569,7 @@ namespace mongo {
 
         DBClientWithCommands() : _logLevel(0),
                 _cachedAvailableOptions( (enum QueryOptions)0 ),
-                _haveCachedAvailableOptions(false),
-                _hasAuthentication(false) { }
+                _haveCachedAvailableOptions(false) { }
 
         /** helper function.  run a simple command where the command expression is simply
               { command : 1 }
@@ -596,7 +595,7 @@ namespace mongo {
             @return true if the command returned "ok".
         */
         virtual bool runCommand(const string &dbname, const BSONObj& cmd, BSONObj &info,
-                                int options=0, const AuthenticationTable* auth = NULL);
+                                int options=0);
 
         /** Authorize access to a particular database.
             Authentication is separate for each database on the server -- you may authenticate for any
@@ -865,9 +864,6 @@ namespace mongo {
 
         bool exists( const string& ns );
 
-        virtual void setAuthenticationTable( const AuthenticationTable& auth );
-        virtual void clearAuthenticationTable();
-
         /** Create an index if it does not already exist.
             ensureIndex calls are remembered so it is safe/fast to call this function many
             times in your code.
@@ -935,14 +931,9 @@ namespace mongo {
 
         virtual QueryOptions _lookupAvailableOptions();
 
-        bool hasAuthenticationTable();
-        AuthenticationTable& getAuthenticationTable();
-
     private:
         enum QueryOptions _cachedAvailableOptions;
         bool _haveCachedAvailableOptions;
-        AuthenticationTable _authTable;
-        bool _hasAuthentication;
     };
 
     /**
@@ -1146,8 +1137,7 @@ namespace mongo {
         virtual bool runCommand(const string &dbname,
                                 const BSONObj& cmd,
                                 BSONObj &info,
-                                int options=0,
-                                const AuthenticationTable* auth=NULL);
+                                int options=0);
 
         /**
            @return true if this connection is currently in a failed state.  When autoreconnect is on,

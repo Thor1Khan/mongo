@@ -245,9 +245,8 @@ namespace mongo {
     public:
         ReplicationInfoServerStatus() : ServerStatusSection( "repl" ){}
         bool includeByDefault() const { return true; }
-        bool adminOnly() const { return false; }
         
-        BSONObj generateSection( const BSONElement& configElement, bool userIsAdmin ) const {
+        BSONObj generateSection(const BSONElement& configElement) const {
             if ( ! anyReplEnabled() )
                 return BSONObj();
             
@@ -825,8 +824,8 @@ namespace mongo {
 
         int get() const { return _value; }
 
-        virtual void append( BSONObjBuilder& b ) {
-            b.append( name(), _value );
+        virtual void append( BSONObjBuilder& b, const string& name ) {
+            b.append( name, _value );
         }
 
         virtual Status set( const BSONElement& newValuElement ) {
@@ -1127,7 +1126,7 @@ namespace mongo {
         if( noauth ) {
             return true;
         }
-        if (!cc().isAdmin() || !cc().getAuthorizationManager()->hasInternalAuthorization()) {
+        if (!cc().getAuthorizationManager()->hasInternalAuthorization()) {
             log() << "replauthenticate: requires internal authorization, failing" << endl;
             return false;
         }
@@ -1160,10 +1159,7 @@ namespace mongo {
             log() << "replauthenticate: can't authenticate to master server, user:" << u << endl;
             return false;
         }
-        if ( internalSecurity.pwd.length() > 0 ) {
-            conn->setAuthenticationTable(
-                    AuthenticationTable::getInternalSecurityAuthenticationTable() );
-        }
+
         return true;
     }
 

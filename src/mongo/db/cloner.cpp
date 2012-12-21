@@ -23,6 +23,7 @@
 #include "mongo/bson/util/builder.h"
 #include "mongo/db/cloner.h"
 #include "mongo/db/commands.h"
+#include "mongo/db/commands/rename_collection.h"
 #include "mongo/db/db.h"
 #include "mongo/db/instance.h"
 #include "mongo/db/jsobj.h"
@@ -829,7 +830,7 @@ namespace mongo {
         virtual bool adminOnly() const {
             return true;
         }
-        virtual bool requiresAuth() { return false; } // do our own auth
+        virtual bool requiresAuth() { return true; }
         virtual bool slaveOk() const {
             return false;
         }
@@ -837,6 +838,11 @@ namespace mongo {
         virtual bool lockGlobally() const { return true; }
         virtual bool logTheOp() {
             return true; // can't log steps when doing fast rename within a db, so always log the op rather than individual steps comprising it.
+        }
+        virtual void addRequiredPrivileges(const std::string& dbname,
+                                           const BSONObj& cmdObj,
+                                           std::vector<Privilege>* out) {
+            rename_collection::addPrivilegesRequiredForRenameCollection(cmdObj, out);
         }
         virtual void help( stringstream &help ) const {
             help << " example: { renameCollection: foo.a, to: bar.b }";

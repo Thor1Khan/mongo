@@ -1,7 +1,5 @@
-// @file db.logger.h
-
-/*
- *    Copyright (C) 2010 10gen Inc.
+/**
+ *    Copyright (C) 2012 10gen Inc.
  *
  *    This program is free software: you can redistribute it and/or  modify
  *    it under the terms of the GNU Affero General Public License, version 3,
@@ -18,14 +16,19 @@
 
 #pragma once
 
+#include <string>
+#include <vector>
+
+#include "mongo/db/auth/privilege.h"
+#include "mongo/db/jsobj.h"
+
 namespace mongo {
+namespace rename_collection {
 
-    /** helper to log (and read log) of a capped collection in the database */
-    class DBLogger {
-        bool _inited;
-    public:
-        const string _ns;
-        DBLogger(const std::string& ns) : _inited(false), _ns(ns) { }
-    };
+    void addPrivilegesRequiredForRenameCollection(const BSONObj& cmdObj,
+                                                  std::vector<Privilege>* out);
 
-}
+} // namespace rename_collection
+} // namespace mongo
+
+

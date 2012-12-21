@@ -19,7 +19,6 @@
 #include <boost/thread/thread.hpp>
 
 #include "mongo/db/commands.h"
-#include "mongo/db/helpers/dblogger.h"
 #include "mongo/db/instance.h"
 #include "mongo/db/repl.h"
 #include "mongo/db/repl/bgsync.h"
@@ -171,11 +170,7 @@ namespace mongo {
                 !Lock::somethingWriteLocked() || theReplSet == 0 || !theReplSet->lockedByMe() );
 
         ScopedConn conn(memberFullName);
-        return conn.runCommand("admin",
-                               cmd,
-                               result,
-                               0,
-                               &AuthenticationTable::getInternalSecurityAuthenticationTable());
+        return conn.runCommand("admin", cmd, result, 0);
     }
 
     /**

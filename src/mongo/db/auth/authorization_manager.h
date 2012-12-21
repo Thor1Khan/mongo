@@ -59,6 +59,12 @@ namespace mongo {
         static const std::string SERVER_RESOURCE_NAME;
         static const std::string CLUSTER_RESOURCE_NAME;
 
+        // Checks to see if "doc" is a valid privilege document, assuming it is stored in the
+        // "system.users" collection of database "dbname".
+        //
+        // Returns Status::OK() if the document is good, or Status(ErrorCodes::BadValue), otherwise.
+        static Status checkValidPrivilegeDocument(const StringData& dbname, const BSONObj& doc);
+
         // Takes ownership of the externalState.
         explicit AuthorizationManager(AuthExternalState* externalState);
         ~AuthorizationManager();
@@ -137,7 +143,10 @@ namespace mongo {
         // namespace.
         Status checkAuthForGetMore(const std::string& ns);
 
-        // Checks if this connection is authorized for all the given Privileges
+        // Checks if this connection is authorized for the given Privilege.
+        Status checkAuthForPrivilege(const Privilege& privilege);
+
+        // Checks if this connection is authorized for all the given Privileges.
         Status checkAuthForPrivileges(const vector<Privilege>& privileges);
 
         // Given a database name and a readOnly flag return an ActionSet describing all the actions
@@ -150,6 +159,10 @@ namespace mongo {
                                         const PrincipalName& principal,
                                         const BSONObj& privilegeDocument,
                                         PrivilegeSet* result);
+
+        // Returns an ActionSet of all actions that can be be granted to users.  This does not
+        // include internal-only actions.
+        static ActionSet getAllUserActions();
 
     private:
 
@@ -171,6 +184,10 @@ namespace mongo {
                 const PrincipalName& principal,
                 const BSONObj& privilegeDocument,
                 PrivilegeSet* result);
+
+        // Returns a new privilege that has replaced the actions needed to handle special casing
+        // certain namespaces like system.users and system.profile.
+        Privilege _modifyPrivilegeForSpecialCases(const Privilege& privilege);
 
         scoped_ptr<AuthExternalState> _externalState;
 

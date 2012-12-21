@@ -32,6 +32,7 @@ _ disallow system* manipulations from the database.
 #include <list>
 
 #include "mongo/base/counter.h"
+#include "mongo/db/auth/authorization_manager.h"
 #include "mongo/db/pdfile_private.h"
 #include "mongo/db/background.h"
 #include "mongo/db/btree.h"
@@ -1100,7 +1101,7 @@ namespace mongo {
     }
 
     Counter64 moveCounter;
-    ServerStatusMetricField<Counter64> moveCounterDisplay( "record.moves", false, &moveCounter );
+    ServerStatusMetricField<Counter64> moveCounterDisplay( "record.moves", &moveCounter );
 
     /** Note: if the object shrinks a lot, we don't free up space, we leave extra at end of the record.
      */
@@ -1129,6 +1130,11 @@ namespace mongo {
             b.append(e); // put _id first, for best performance
             b.appendElements(objNew);
             objNew = b.obj();
+        }
+
+        NamespaceString nsstring(ns);
+        if (nsstring.coll == "system.users") {
+            uassertStatusOK(AuthorizationManager::checkValidPrivilegeDocument(nsstring.db, objNew));
         }
 
         /* duplicate key check. we descend the btree twice - once for this check, and once for the actual inserts, further
@@ -1369,10 +1375,8 @@ namespace mongo {
             else if ( legalClientSystemNS( ns , true ) ) {
                 if ( obuf && strstr( ns , ".system.users" ) ) {
                     BSONObj t( reinterpret_cast<const char *>( obuf ) );
-                    uassert( 14051 , "system.users entry needs 'user' field to be a string" , t["user"].type() == String );
-                    uassert( 14052 , "system.users entry needs 'pwd' field to be a string" , t["pwd"].type() == String );
-                    uassert( 14053 , "system.users entry needs 'user' field to be non-empty" , t["user"].String().size() );
-                    uassert( 14054 , "system.users entry needs 'pwd' field to be non-empty" , t["pwd"].String().size() );
+                    uassertStatusOK(AuthorizationManager::checkValidPrivilegeDocument(
+                                            nsToDatabaseSubstring(ns), t));
                 }
             }
             else if ( !god ) {

@@ -59,58 +59,6 @@
 
 namespace mongo {
 
-    namespace dur { 
-        void setAgeOutJournalFiles(bool rotate);
-    }
-    /** @return true if fields found */
-    bool setParmsMongodSpecific(const string& dbname, BSONObj& cmdObj, string& errmsg, BSONObjBuilder& result, bool fromRepl ) { 
-        BSONElement e = cmdObj["ageOutJournalFiles"];
-        if( !e.eoo() ) {
-            bool r = e.trueValue();
-            log() << "ageOutJournalFiles " << r << endl;
-            dur::setAgeOutJournalFiles(r);
-            return true;
-        }
-        if( cmdObj.hasElement( "replIndexPrefetch" ) ) {
-            if (!theReplSet) {
-                errmsg = "replication is not enabled";
-                return false;
-            }
-            std::string prefetch = cmdObj["replIndexPrefetch"].valuestrsafe();
-            log() << "changing replication index prefetch behavior to " << prefetch << endl;
-            // default:
-            ReplSetImpl::IndexPrefetchConfig prefetchConfig = ReplSetImpl::PREFETCH_ALL;
-            if (prefetch == "none")
-                prefetchConfig = ReplSetImpl::PREFETCH_NONE;
-            else if (prefetch == "_id_only")
-                prefetchConfig = ReplSetImpl::PREFETCH_ID_ONLY;
-            else if (prefetch == "all")
-                prefetchConfig = ReplSetImpl::PREFETCH_ALL;
-            else {
-                warning() << "unrecognized indexPrefetch setting: " << prefetch << endl;
-            }
-            theReplSet->setIndexPrefetchConfig(prefetchConfig);
-            return true;
-        }
-
-        return false;
-    }
-
-    const char* fetchReplIndexPrefetchParam() {
-        if (!theReplSet) return "uninitialized";
-        ReplSetImpl::IndexPrefetchConfig ip = theReplSet->getIndexPrefetchConfig();
-        switch (ip) {
-        case ReplSetImpl::PREFETCH_NONE:
-            return "none";
-        case ReplSetImpl::PREFETCH_ID_ONLY:
-            return "_id_only";
-        case ReplSetImpl::PREFETCH_ALL:
-            return "all";
-        default:
-            return "invalid";
-        }
-    }
-
     /* reset any errors so that getlasterror comes back clean.
 
        useful before performing a long series of operations where we want to
@@ -1619,13 +1567,6 @@ namespace mongo {
             help << "internal. for testing only.";
         }
         virtual bool run(const string& dbname, BSONObj& cmdObj, int, string& errmsg, BSONObjBuilder& result, bool) {
-
-            AuthenticationInfo *ai = cc().getAuthenticationInfo();
-            if ( ! ai->isLocalHost() ) {
-                errmsg = "godinsert only works locally";
-                return false;
-            }
-
             string coll = cmdObj[ "godinsert" ].valuestrsafe();
             log() << "test only command godinsert invoked coll:" << coll << endl;
             uassert( 13049, "godinsert must specify a collection", !coll.empty() );
@@ -1900,31 +1841,8 @@ namespace mongo {
 
         std::string dbname = nsToDatabase( cmdns );
 
-        AuthenticationInfo *ai = client.getAuthenticationInfo();
-        // Won't clear the temporary auth if it's already set at this point
-        AuthenticationInfo::TemporaryAuthReleaser authRelease( ai );
-
-        // Some commands run other commands using the DBDirectClient. When this happens,the inner
-        // command doesn't get $auth added to the command object, but the temporary authorization
-        // for that thread is already set.  Therefore, we shouldn't error if no $auth is provided
-        // but we already have temporary auth credentials set.
-        if ( ai->usingInternalUser() && !ai->hasTemporaryAuthorization() ) {
-            // The temporary authentication will be cleared when authRelease goes out of scope
-            if ( cmdObj.hasField(AuthenticationTable::fieldName.c_str()) ) {
-                BSONObj authObj = cmdObj[AuthenticationTable::fieldName].Obj();
-                ai->setTemporaryAuthorization( authObj );
-            } else {
-                log() << "command denied: " << cmdObj.toString() << endl;
-                appendCommandStatus(result,
-                                    false,
-                                    "unauthorized: no auth credentials provided for command and "
-                                    "authenticated using internal user.  This is most likely "
-                                    "because you are using an old version of mongos");
-                return;
-            }
-        }
-
-        if( c->adminOnly() && c->localHostOnlyIfNoAuth( cmdObj ) && noauth && !ai->isLocalHost() ) {
+        if (c->adminOnly() && c->localHostOnlyIfNoAuth(cmdObj) && noauth &&
+                !client.getIsLocalHostConnection()) {
             log() << "command denied: " << cmdObj.toString() << endl;
             appendCommandStatus(result,
                                 false,
@@ -1993,14 +1911,6 @@ namespace mongo {
 
             // we also trust that this won't crash
             retval = true;
-
-            if ( c->requiresAuth() ) {
-                // test that the user at least as read permissions
-                if ( ! client.getAuthenticationInfo()->isAuthorizedReads( dbname ) ) {
-                    errmsg = "need to login";
-                    retval = false;
-                }
-            }
 
             if (retval) {
                 client.curop()->ensureStarted();

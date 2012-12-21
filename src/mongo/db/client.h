@@ -83,7 +83,6 @@ namespace mongo {
         string clientAddress(bool includePort=false) const;
         const AuthenticationInfo * getAuthenticationInfo() const { return &_ai; }
         AuthenticationInfo * getAuthenticationInfo() { return &_ai; }
-        bool isAdmin() { return _ai.isAuthorized( "admin" ); }
         CurOp* curop() const { return _curOp; }
         Context* getContext() const { return _context; }
         Database* database() const {  return _context ? _context->db() : 0; }
@@ -207,7 +206,6 @@ namespace mongo {
         private:
             friend class CurOp;
             void _finishInit( bool doauth=true);
-            void _auth( int lockState );
             void checkNotStale() const;
             void checkNsAccess( bool doauth );
             void checkNsAccess( bool doauth, int lockState );
