@@ -178,6 +178,13 @@ namespace mongo {
 
             BSONElement e = cmdObj["w"];
             if ( e.ok() ) {
+
+                if ( cmdLine.configsvr ) {
+                    result.append( "wnote", "can't use w on config servers" );
+                    result.append( "err", "norepl" );
+                    return true;
+                }
+
                 int timeout = cmdObj["wtimeout"].numberInt();
                 Timer t;
 
@@ -208,7 +215,8 @@ namespace mongo {
                 }
 
                 if ( !theReplSet && !e.isNumber() ) {
-                    result.append( "err", "cannot use non integer w values for non-replica sets" );
+                    result.append( "wnote", "cannot use non integer w values for non-replica sets" );
+                    result.append( "err", "noreplset" );
                     return true;
                 }
 

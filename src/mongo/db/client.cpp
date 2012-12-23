@@ -66,9 +66,9 @@ namespace mongo {
 
     struct StackChecker { 
 #if defined(_WIN32)
-        enum { SZ = 322 * 1024 };
+        enum { SZ = 330 * 1024 };
 #elif defined(__APPLE__) && defined(__MACH__)
-        enum { SZ = 362 * 1024 };
+        enum { SZ = 374 * 1024 };
 #elif defined(__linux__)
         enum { SZ = 218 * 1024 };
 #else
