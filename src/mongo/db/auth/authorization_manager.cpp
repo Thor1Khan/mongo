@@ -31,7 +31,6 @@
 #include "mongo/db/client.h"
 #include "mongo/db/jsobj.h"
 #include "mongo/db/namespacestring.h"
-#include "mongo/db/security_common.h"
 #include "mongo/util/assert_util.h"
 #include "mongo/util/log.h"
 #include "mongo/util/mongoutils/str.h"
@@ -96,8 +95,6 @@ namespace {
     // is authorized to perform
     MONGO_INITIALIZER(AuthorizationSystemRoles)(InitializerContext* context) {
         // Read role
-        // TODO: Remove OLD_READ once commands require the proper actions
-        readRoleActions.addAction(ActionType::oldRead);
         readRoleActions.addAction(ActionType::cloneCollectionLocalSource);
         readRoleActions.addAction(ActionType::collStats);
         readRoleActions.addAction(ActionType::dbHash);
@@ -106,8 +103,6 @@ namespace {
 
         // Read-write role
         readWriteRoleActions.addAllActionsFromSet(readRoleActions);
-        // TODO: Remove OLD_WRITE once commands require the proper actions
-        readWriteRoleActions.addAction(ActionType::oldWrite);
         readWriteRoleActions.addAction(ActionType::cloneCollectionTarget);
         readWriteRoleActions.addAction(ActionType::convertToCapped);
         readWriteRoleActions.addAction(ActionType::createCollection); // db admin gets this also

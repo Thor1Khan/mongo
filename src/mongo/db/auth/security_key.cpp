@@ -1,4 +1,3 @@
-// security_common.cpp
 /*
  *    Copyright (C) 2010 10gen Inc.
  *
@@ -15,29 +14,17 @@
  *    along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-/**
- * This file contains inter-mongo instance security helpers.  Due to the
- * requirement that it be possible to compile this into mongos and mongod, it
- * should not depend on much external stuff.
- */
-
-#include "pch.h"
+#include "mongo/db/auth/security_key.h"
 
 #include <sys/stat.h>
 #include <string>
 #include <vector>
 
+#include "mongo/client/dbclientinterface.h"
 #include "mongo/db/auth/action_set.h"
 #include "mongo/db/auth/action_type.h"
 #include "mongo/db/auth/authorization_manager.h"
 #include "mongo/db/auth/privilege.h"
-#include "mongo/db/jsobj.h"
-#include "security.h"
-#include "security_common.h"
-#include "commands.h"
-#include "../util/md5.hpp"
-#include "client_basic.h"
-#include "mongo/client/dbclientinterface.h"
 
 
 namespace mongo {
@@ -115,44 +102,6 @@ namespace mongo {
         internalSecurity.pwd = conn.createPasswordDigest(internalSecurity.user, str);
 
         return true;
-    }
-
-    void CmdAuthenticate::authenticate(const string& dbname, const string& user, const bool readOnly) {
-        ClientBasic* c = ClientBasic::getCurrent();
-        verify(c);
-        AuthenticationInfo *ai = c->getAuthenticationInfo();
-
-        if ( readOnly ) {
-            ai->authorizeReadOnly( dbname , user );
-        }
-        else {
-            ai->authorize( dbname , user );
-        }
-    }
-
-
-    bool AuthenticationInfo::_isAuthorized(const string& dbname, Auth::Level level) const {
-        if ( noauth ) {
-            return true;
-        }
-        {
-            scoped_spinlock lk(_lock);
-
-            if ( _isAuthorizedSingle_inlock( dbname , level ) )
-                return true;
-
-            if ( _isAuthorizedSingle_inlock( "admin" , level ) )
-                return true;
-
-            if ( _isAuthorizedSingle_inlock( "local" , level ) )
-                return true;
-        }
-        return _isAuthorizedSpecialChecks( dbname );
-    }
-
-    bool AuthenticationInfo::_isAuthorizedSingle_inlock(const string& dbname, Auth::Level level) const {
-        const AuthenticationTable& authTable = _usingTempAuth ? _tempAuthTable : _authTable;
-        return authTable.getAuthForDb( dbname ).level >= level;
     }
 
 } // namespace mongo
