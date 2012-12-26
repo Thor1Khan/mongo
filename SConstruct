@@ -787,6 +787,7 @@ else:
     env.Prepend(CPPDEFINES=['BOOST_ALL_DYN_LINK'])
 
 env.Prepend(CPPPATH=['$BUILD_DIR/third_party/s2'])
+env.Prepend(CPPPATH=['$BUILD_DIR/third_party/libstemmer_c/include'])
 
 env.Append( CPPPATH=['$EXTRACPPPATH'],
             LIBPATH=['$EXTRALIBPATH'] )
