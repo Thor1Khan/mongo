@@ -59,6 +59,20 @@ try:
 except ImportError:
     import pickle
 
+try:
+    from hashlib import md5 # new in 2.5
+except ImportError:
+    from md5 import md5 # deprecated in 2.5
+
+try:
+    import json
+except:
+    try:
+        import simplejson as json
+    except:
+        json = None
+
+
 # TODO clean this up so we don't need globals...
 mongo_repo = os.getcwd() #'./'
 failfile = os.path.join(mongo_repo, 'failfile.smoke')
@@ -84,6 +98,8 @@ screwy_in_slave = {}
 smoke_db_prefix = ''
 small_oplog = False
 small_oplog_rs = False
+
+all_test_results = []
 
 # This class just implements the with statement API, for a sneaky
 # purpose below.
@@ -194,6 +210,9 @@ class mongod(object):
             argv += ['--nopreallocj']
         if self.kwargs.get('auth'):
             argv += ['--auth']
+            authMechanism = self.kwargs.get('authMechanism', 'MONGO-CR')
+            if authMechanism != 'MONGO-CR':
+                argv.append('--setParameter=authenticationMechanisms=' + authMechanism)
             self.auth = True
         if self.kwargs.get('use_ssl'):
             argv += ['--sslOnNormalPorts',
@@ -390,7 +409,7 @@ def runTest(test):
         if os.path.basename(path) in ('python', 'python.exe'):
             path = argv[1]
     elif ext == ".js":
-        argv = [shell_executable, "--port", mongod_port]
+        argv = [shell_executable, "--port", mongod_port, '--authenticationMechanism', authMechanism]
         if not usedb:
             argv += ["--nodb"]
         if small_oplog or small_oplog_rs:
@@ -507,6 +526,7 @@ def run_tests(tests):
                         no_journal=no_journal,
                         no_preallocj=no_preallocj,
                         auth=auth,
+                        authMechanism=authMechanism,
                         use_ssl=use_ssl).__enter__()
     else:
         master = Nothing()
@@ -520,6 +540,7 @@ def run_tests(tests):
                            no_journal=no_journal,
                            no_preallocj=no_preallocj,
                            auth=auth,
+                           authMechanism=authMechanism,
                            use_ssl=use_ssl).__enter__()
             primary = Connection(port=master.port, slave_okay=True);
 
@@ -541,11 +562,16 @@ def run_tests(tests):
 
             tests_run = 0
             for tests_run, test in enumerate(tests):
+                test_result = { "test": test[0], "start": time.time() }
                 try:
                     fails.append(test)
                     runTest(test)
                     fails.pop()
                     winners.append(test)
+
+                    test_result["passed"] = True
+                    test_result["end"] = time.time()
+                    all_test_results.append( test_result )
 
                     if small_oplog or small_oplog_rs:
                         master.wait_for_repl()
@@ -558,9 +584,14 @@ def run_tests(tests):
                                             no_journal=no_journal,
                                             no_preallocj=no_preallocj,
                                             auth=auth,
+                                            authMechanism=authMechanism,
                                             use_ssl=use_ssl).__enter__()
 
                 except TestFailure, f:
+                    test_result["passed"] = False
+                    test_result["end"] = time.time()
+                    test_result["error"] = str(f)
+                    all_test_results.append( test_result )
                     try:
                         print f
                         # Record the failing test and re-raise.
@@ -696,7 +727,7 @@ def add_exe(e):
 
 def set_globals(options, tests):
     global mongod_executable, mongod_port, shell_executable, continue_on_failure, small_oplog, small_oplog_rs
-    global no_journal, no_preallocj, auth, keyFile, smoke_db_prefix, test_path, start_mongod
+    global no_journal, no_preallocj, auth, authMechanism, keyFile, smoke_db_prefix, test_path, start_mongod
     global use_ssl
     global file_of_commands_mode
     start_mongod = options.start_mongod
@@ -728,8 +759,10 @@ def set_globals(options, tests):
             print "Not running client suite with auth even though --auth was provided"
         auth = False;
         keyFile = False;
+        authMechanism = None
     else:
         auth = options.auth
+        authMechanism = options.authMechanism
         keyFile = options.keyFile
 
     if auth and not keyFile:
@@ -741,6 +774,9 @@ def set_globals(options, tests):
     # file (or stdin) rather than running a suite of js tests
     file_of_commands_mode = options.File and options.mode == 'files'
 
+def file_version():
+    return md5(open(__file__, 'r').read()).hexdigest()
+
 def clear_failfile():
     if os.path.exists(failfile):
         os.remove(failfile)
@@ -750,7 +786,7 @@ def run_old_fails():
 
     try:
         f = open(failfile, 'r')
-        testsAndOptions = pickle.load(f)
+        state = pickle.load(f)
         f.close()
     except Exception:
         try:
@@ -760,6 +796,12 @@ def run_old_fails():
         clear_failfile()
         return # This counts as passing so we will run all tests
 
+    if ('version' not in state or state['version'] != file_version()):
+        print "warning: old version of failfile.smoke detected. skipping recent fails"
+        clear_failfile()
+        return
+
+    testsAndOptions = state['testsAndOptions']
     tests = [x[0] for x in testsAndOptions]
     passed = []
     try:
@@ -787,7 +829,8 @@ def run_old_fails():
 
         if testsAndOptions:
             f = open(failfile, 'w')
-            pickle.dump(testsAndOptions, f)
+            state = {'version':file_version(), 'testsAndOptions':testsAndOptions}
+            pickle.dump(state, f)
         else:
             clear_failfile()
 
@@ -804,8 +847,9 @@ def add_to_failfile(tests, options):
         if (test, options) not in testsAndOptions:
             testsAndOptions.append( (test, options) )
 
+    state = {'version':file_version(), 'testsAndOptions':testsAndOptions}
     f = open(failfile, 'w')
-    pickle.dump(testsAndOptions, f)
+    pickle.dump(state, f)
 
 
 
@@ -848,6 +892,8 @@ def main():
     parser.add_option('--auth', dest='auth', default=False,
                       action="store_true",
                       help='Run standalone mongods in tests with authentication enabled')
+    parser.add_option('--authMechanism', dest='authMechanism', default='MONGO-CR',
+                      help='Use the given authentication mechanism, when --auth is used.')
     parser.add_option('--keyFile', dest='keyFile', default=None,
                       help='Path to keyFile to use to run replSet and sharding tests with authentication enabled')
     parser.add_option('--ignore', dest='ignore_files', default=None,
@@ -941,8 +987,12 @@ def main():
         run_tests(tests)
     finally:
         add_to_failfile(fails, options)
-        report()
 
+        f = open( "smoke-last.json", "wb" )
+        f.write( json.dumps( { "results" : all_test_results } ) )
+        f.close()
+
+        report()
 
 if __name__ == "__main__":
     main()
