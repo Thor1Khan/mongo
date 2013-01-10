@@ -1772,11 +1772,11 @@
     <ClCompile Include="auth\auth_server_parameters.cpp">
       <Filter>db\auth</Filter>
     </ClCompile>
-    <ClCompile Include="index_builder.cpp">
-      <Filter>db\Source Files\e to n</Filter>
-    </ClCompile>
     <ClCompile Include="ops\field_ref.cpp">
       <Filter>db\ops</Filter>
+    </ClCompile>
+    <ClCompile Include="stats\timer_stats.cpp">
+      <Filter>db\stats</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -3759,14 +3759,17 @@
     <ClInclude Include="fts\tokenizer.h">
       <Filter>db\fts</Filter>
     </ClInclude>
-    <ClInclude Include="index_builder.h">
-      <Filter>db\Header Files\e to n</Filter>
-    </ClInclude>
     <ClInclude Include="ops\field_ref.h">
       <Filter>db\ops</Filter>
     </ClInclude>
     <ClInclude Include="ops\modifier_base.h">
       <Filter>db\ops</Filter>
+    </ClInclude>
+    <ClInclude Include="stats\fine_clock.h">
+      <Filter>db\stats</Filter>
+    </ClInclude>
+    <ClInclude Include="stats\timer_stats.h">
+      <Filter>db\stats</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

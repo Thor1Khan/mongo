@@ -1662,14 +1662,26 @@
     <ClInclude Include="..\db\fts\tokenizer.h">
       <Filter>db\fts</Filter>
     </ClInclude>
-    <ClInclude Include="..\db\index_builder.h">
-      <Filter>db\Header Files\e to n</Filter>
-    </ClInclude>
     <ClInclude Include="..\db\ops\field_ref.h">
       <Filter>db\ops</Filter>
     </ClInclude>
     <ClInclude Include="..\db\ops\modifier_base.h">
       <Filter>db\ops</Filter>
+    </ClInclude>
+    <ClInclude Include="..\db\stats\counters.h">
+      <Filter>db\stats</Filter>
+    </ClInclude>
+    <ClInclude Include="..\db\stats\fine_clock.h">
+      <Filter>db\stats</Filter>
+    </ClInclude>
+    <ClInclude Include="..\db\stats\snapshots.h">
+      <Filter>db\stats</Filter>
+    </ClInclude>
+    <ClInclude Include="..\db\stats\timer_stats.h">
+      <Filter>db\stats</Filter>
+    </ClInclude>
+    <ClInclude Include="..\db\stats\top.h">
+      <Filter>db\stats</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
@@ -3280,14 +3292,14 @@
     <ClCompile Include="keypatterntests.cpp">
       <Filter>dbtests</Filter>
     </ClCompile>
-    <ClCompile Include="..\db\index_builder.cpp">
-      <Filter>db\Source Files\e to n</Filter>
-    </ClCompile>
     <ClCompile Include="..\db\auth\auth_server_parameters.cpp">
       <Filter>db\auth</Filter>
     </ClCompile>
     <ClCompile Include="..\db\ops\field_ref.cpp">
       <Filter>db\ops</Filter>
+    </ClCompile>
+    <ClCompile Include="..\db\stats\timer_stats.cpp">
+      <Filter>db\stats</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>

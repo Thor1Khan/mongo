@@ -2436,7 +2436,6 @@ cscript //Nologo "$(ProjectDir)..\shell\createCPPfromJavaScriptFiles.js" "$(Proj
       <DisableSpecificWarnings Condition="'$(Configuration)|$(Platform)'=='Win2008PlusRelease|x64'">4355;4800;4267;4244;4351;4146</DisableSpecificWarnings>
     </ClCompile>
     <ClCompile Include="geo\shapes.cpp" />
-    <ClCompile Include="index_builder.cpp" />
     <ClCompile Include="index_rebuilder.cpp" />
     <ClCompile Include="initialize_server_global_state.cpp" />
     <ClCompile Include="intervalbtreecursor.cpp" />
@@ -2522,6 +2521,7 @@ cscript //Nologo "$(ProjectDir)..\shell\createCPPfromJavaScriptFiles.js" "$(Proj
     <ClCompile Include="projection.cpp" />
     <ClCompile Include="repl\bgsync.cpp" />
     <ClCompile Include="server_parameters.cpp" />
+    <ClCompile Include="stats\timer_stats.cpp" />
     <ClCompile Include="ttl.cpp" />
     <ClInclude Include="..\..\third_party\boost\boost\smart_ptr\scoped_ptr.hpp" />
     <ClInclude Include="..\..\third_party\libstemmer_c\include\libstemmer.h" />
@@ -3084,7 +3084,6 @@ cscript //Nologo "$(ProjectDir)..\shell\createCPPfromJavaScriptFiles.js" "$(Proj
     <ClInclude Include="geo\shapes.h" />
     <ClInclude Include="hasher.h" />
     <ClInclude Include="hashindex.h" />
-    <ClInclude Include="index_builder.h" />
     <ClInclude Include="index_insertion_continuation.h" />
     <ClInclude Include="index_rebuilder.h" />
     <ClInclude Include="index_update.h" />
@@ -3212,6 +3211,8 @@ cscript //Nologo "$(ProjectDir)..\shell\createCPPfromJavaScriptFiles.js" "$(Proj
     <ClInclude Include="server_parameters.h" />
     <ClInclude Include="server_parameters_inline.h" />
     <ClInclude Include="sort_phase_one.h" />
+    <ClInclude Include="stats\fine_clock.h" />
+    <ClInclude Include="stats\timer_stats.h" />
     <ClInclude Include="taskqueue.h" />
     <ClInclude Include="ttl.h" />
   </ItemGroup>

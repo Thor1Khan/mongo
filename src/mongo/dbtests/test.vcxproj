@@ -713,7 +713,6 @@ cscript //Nologo "$(ProjectDir)..\shell\createCPPfromJavaScriptFiles.js" "$(Proj
     <ClInclude Include="..\db\hashindex.h" />
     <ClInclude Include="..\db\index.h" />
     <ClInclude Include="..\db\indexkey.h" />
-    <ClInclude Include="..\db\index_builder.h" />
     <ClInclude Include="..\db\index_insertion_continuation.h" />
     <ClInclude Include="..\db\index_rebuilder.h" />
     <ClInclude Include="..\db\index_update.h" />
@@ -760,6 +759,11 @@ cscript //Nologo "$(ProjectDir)..\shell\createCPPfromJavaScriptFiles.js" "$(Proj
     <ClInclude Include="..\db\repl\bgsync.h" />
     <ClInclude Include="..\db\server_parameters.h" />
     <ClInclude Include="..\db\server_parameters_inline.h" />
+    <ClInclude Include="..\db\stats\counters.h" />
+    <ClInclude Include="..\db\stats\fine_clock.h" />
+    <ClInclude Include="..\db\stats\snapshots.h" />
+    <ClInclude Include="..\db\stats\timer_stats.h" />
+    <ClInclude Include="..\db\stats\top.h" />
     <ClInclude Include="..\platform\atomic_intrinsics.h" />
     <ClInclude Include="..\platform\atomic_intrinsics_win32.h" />
     <ClInclude Include="..\platform\atomic_word.h" />
@@ -2721,7 +2725,6 @@ cscript //Nologo "$(ProjectDir)..\shell\createCPPfromJavaScriptFiles.js" "$(Proj
     </ClCompile>
     <ClCompile Include="..\db\geo\shapes.cpp" />
     <ClCompile Include="..\db\hasher.cpp" />
-    <ClCompile Include="..\db\index_builder.cpp" />
     <ClCompile Include="..\db\index_rebuilder.cpp" />
     <ClCompile Include="..\db\index_update.cpp" />
     <ClCompile Include="..\db\interrupt_status_mongod.cpp" />
@@ -2791,6 +2794,7 @@ cscript //Nologo "$(ProjectDir)..\shell\createCPPfromJavaScriptFiles.js" "$(Proj
     <ClCompile Include="..\db\restapi.cpp" />
     <ClCompile Include="..\db\scanandorder.cpp" />
     <ClCompile Include="..\db\server_parameters.cpp" />
+    <ClCompile Include="..\db\stats\timer_stats.cpp" />
     <ClCompile Include="..\platform\random.cpp" />
     <ClCompile Include="..\scripting\bson_template_evaluator.cpp" />
     <ClCompile Include="..\scripting\sm_db.cpp" />

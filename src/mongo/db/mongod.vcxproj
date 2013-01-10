@@ -2111,6 +2111,7 @@ cscript //Nologo "$(ProjectDir)..\shell\createCPPfromJavaScriptFiles.js" "$(Proj
     <ClCompile Include="repl\bgsync.cpp" />
     <ClCompile Include="server_extra_log_context.cpp" />
     <ClCompile Include="server_parameters.cpp" />
+    <ClCompile Include="stats\timer_stats.cpp" />
     <ClCompile Include="ttl.cpp" />
     <ClInclude Include="..\..\third_party\boost\boost\smart_ptr\scoped_ptr.hpp" />
     <ClInclude Include="..\..\third_party\js-1.7\jsarena.h" />
@@ -2299,6 +2300,7 @@ cscript //Nologo "$(ProjectDir)..\shell\createCPPfromJavaScriptFiles.js" "$(Proj
     <ClInclude Include="..\platform\windows_basic.h" />
     <ClInclude Include="..\scripting\bench.h" />
     <ClInclude Include="..\scripting\bson_template_evaluator.h" />
+    <ClInclude Include="..\scripting\engine_spidermonkey_internal.h" />
     <ClInclude Include="..\s\chunk.h" />
     <ClInclude Include="..\s\collection_manager.h" />
     <ClInclude Include="..\s\config.h" />
@@ -2414,7 +2416,6 @@ cscript //Nologo "$(ProjectDir)..\shell\createCPPfromJavaScriptFiles.js" "$(Proj
     <ClInclude Include="geo\shapes.h" />
     <ClInclude Include="hasher.h" />
     <ClInclude Include="hashindex.h" />
-    <ClInclude Include="index_builder.h" />
     <ClInclude Include="index_insertion_continuation.h" />
     <ClInclude Include="index_rebuilder.h" />
     <ClInclude Include="index_update.h" />
@@ -2543,6 +2544,8 @@ cscript //Nologo "$(ProjectDir)..\shell\createCPPfromJavaScriptFiles.js" "$(Proj
     <ClInclude Include="server_parameters.h" />
     <ClInclude Include="server_parameters_inline.h" />
     <ClInclude Include="sort_phase_one.h" />
+    <ClInclude Include="stats\fine_clock.h" />
+    <ClInclude Include="stats\timer_stats.h" />
     <ClInclude Include="taskqueue.h" />
     <ClInclude Include="ttl.h" />
   </ItemGroup>
