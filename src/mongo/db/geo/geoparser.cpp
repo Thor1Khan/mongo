@@ -68,6 +68,9 @@ namespace mongo {
             for (size_t j = 0; j < thisCoord.size(); ++j) {
                 if (!thisCoord[j].isNumber()) { return false; }
             }
+            // ...where the latitude is valid
+            double lat = thisCoord[1].Number();
+            if (lat < -90 || lat > 90) { return false; }
         }
         return true;
     }
@@ -98,7 +101,9 @@ namespace mongo {
 
         const vector<BSONElement>& coordinates = coordElt.Array();
         if (coordinates.size() != 2) { return false; }
-        return coordinates[0].isNumber() && coordinates[1].isNumber();
+        if (!coordinates[0].isNumber() || !coordinates[1].isNumber()) { return false; }
+        double lat = coordinates[1].Number();
+        return lat >= -90 && lat <= 90;
     }
 
     void GeoParser::parseGeoJSONPoint(const BSONObj& obj, S2Cell* out) {
@@ -163,27 +168,6 @@ namespace mongo {
         return true;
     }
 
-    void fixOrientationTo(vector<S2Point>* points, const bool wantClockwise) {
-        const vector<S2Point>& pointsRef = *points;
-        massert(16463, "Don't have enough points in S2 orientation fixing to work with",
-                4 <= points->size());
-        double sum = 0;
-        // Sum the area under the curve...well really, it's twice the area.
-        for (size_t i = 0; i < pointsRef.size(); ++i) {
-            // TODO(hk): Convince yourself thoroughly that this is right.
-            S2Point a = pointsRef[i];
-            S2Point b = pointsRef[(i + 1) % pointsRef.size()];
-            sum += (b[1] - a[1]) * (b[0] - a[0]);
-        }
-        // If sum > 0, clockwise
-        // If sum < 0, counter-clockwise
-        bool isClockwise = sum > 0;
-        if (isClockwise != wantClockwise) {
-            vector<S2Point> reversed(pointsRef.rbegin(), pointsRef.rend());
-            *points = reversed;
-        }
-    }
-
     void GeoParser::parseGeoJSONPolygon(const BSONObj& obj, S2Polygon* out) {
         const vector<BSONElement>& coordinates =
             obj.getFieldDotted(GEOJSON_COORDINATES).Array();
@@ -192,13 +176,13 @@ namespace mongo {
         vector<S2Point> exteriorVertices;
         parsePoints(exteriorRing, &exteriorVertices);
 
-        // The exterior ring must be counter-clockwise.  We fix it up for the user.
-        fixOrientationTo(&exteriorVertices, false);
-
         S2PolygonBuilderOptions polyOptions;
         polyOptions.set_validate(true);
         S2PolygonBuilder polyBuilder(polyOptions);
         S2Loop exteriorLoop(exteriorVertices);
+        if (exteriorLoop.is_hole()) {
+            exteriorLoop.Invert();
+        }
         polyBuilder.AddLoop(&exteriorLoop);
 
         // Subsequent arrays of coordinates are interior rings/holes.
@@ -206,8 +190,10 @@ namespace mongo {
             vector<S2Point> holePoints;
             parsePoints(coordinates[i].Array(), &holePoints);
             // Interior rings are clockwise.
-            fixOrientationTo(&holePoints, true);
             S2Loop holeLoop(holePoints);
+            if (!holeLoop.is_hole()) {
+                holeLoop.Invert();
+            }
             polyBuilder.AddLoop(&holeLoop);
         }
 
@@ -262,12 +248,13 @@ namespace mongo {
         }
         points.push_back(points[0]);
 
-        fixOrientationTo(&points, false);
-
         S2PolygonBuilderOptions polyOptions;
         polyOptions.set_validate(true);
         S2PolygonBuilder polyBuilder(polyOptions);
         S2Loop exteriorLoop(points);
+        if (exteriorLoop.is_hole()) {
+            exteriorLoop.Invert();
+        }
         polyBuilder.AddLoop(&exteriorLoop);
         polyBuilder.AssemblePolygon(out, NULL);
     }
