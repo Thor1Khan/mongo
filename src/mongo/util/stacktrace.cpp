@@ -20,6 +20,9 @@
 #include "mongo/util/assert_util.h"
 #endif
 
+#ifdef _MSC_VER
+#undef MONGO_HAVE_EXECINFO_BACKTRACE
+#endif
 #ifdef MONGO_HAVE_EXECINFO_BACKTRACE
 
 #include <execinfo.h>
