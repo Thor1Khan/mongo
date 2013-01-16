@@ -24,13 +24,14 @@
 
 namespace mongo {
     S2Cursor::S2Cursor(const BSONObj &keyPattern, const IndexDetails *details,
-                       const BSONObj &query, const vector<QueryGeometry> &fields,
+                       const BSONObj &query, const vector<GeoQuery> &fields,
                        const S2IndexingParams &params, int numWanted)
-        : _details(details), _fields(fields), _params(params), _nscanned(0),
-          _keyPattern(keyPattern), _numToReturn(numWanted) {
+        : _details(details), _fields(fields), _params(params), _keyPattern(keyPattern),
+          _numToReturn(numWanted), _nscanned(0), _matchTested(0), _geoTested(0) {
+
         BSONObjBuilder geoFieldsToNuke;
         for (size_t i = 0; i < _fields.size(); ++i) {
-            geoFieldsToNuke.append(_fields[i].field, "");
+            geoFieldsToNuke.append(_fields[i].getField(), "");
         }
         // false means we want to filter OUT geoFieldsToNuke, not filter to include only that.
         _filteredQuery = query.filterFieldsUndotted(geoFieldsToNuke.obj(), false);
@@ -73,13 +74,20 @@ namespace mongo {
         frsObjBuilder.appendElements(_filteredQuery);
 
         S2RegionCoverer coverer;
-        _params.configureCoverer(&coverer);
 
         for (size_t i = 0; i < _fields.size(); ++i) {
             vector<S2CellId> cover;
+            double area = _fields[i].getRegion().GetRectBound().Area();
+            // Min level is the smallest of our coarsest indexed level, or ~4x the size of the closest
+            // level to the shape we're searching in.
+            coverer.set_min_level(min(_params.coarsestIndexedLevel, 2 + S2::kAvgEdge.GetClosestLevel(area)));
+            // Max level is 16x that of the min level.
+            // NOTE(hk): Should we make this user-configurable?
+            coverer.set_max_level(4 + coverer.min_level());
             coverer.GetCovering(_fields[i].getRegion(), &cover);
             if (0 == cover.size()) { return false; }
-            BSONObj fieldRange = S2SearchUtil::coverAsBSON(cover, _fields[i].field,
+            _cellsInCover = cover.size();
+            BSONObj fieldRange = S2SearchUtil::coverAsBSON(cover, _fields[i].getField(),
                 _params.coarsestIndexedLevel);
             frsObjBuilder.appendElements(fieldRange);
         }
@@ -99,21 +107,24 @@ namespace mongo {
     bool S2Cursor::advance() {
         if (_numToReturn <= 0) { return false; }
         for (; _btreeCursor->ok(); _btreeCursor->advance()) {
+            ++_nscanned;
             if (_seen.end() != _seen.find(_btreeCursor->currLoc())) { continue; }
             _seen.insert(_btreeCursor->currLoc());
 
+            ++_matchTested;
             MatchDetails details;
             bool matched = _matcher->matchesCurrent(_btreeCursor.get(), &details);
             if (!matched) { continue; }
 
             const BSONObj &indexedObj = _btreeCursor->currLoc().obj();
 
+            ++_geoTested;
             size_t geoFieldsMatched = 0;
             // OK, cool, non-geo match satisfied.  See if the object actually overlaps w/the geo
             // query fields.
             for (size_t i = 0; i < _fields.size(); ++i) {
                 BSONElementSet geoFieldElements;
-                indexedObj.getFieldsDotted(_fields[i].field, geoFieldElements, false);
+                indexedObj.getFieldsDotted(_fields[i].getField(), geoFieldElements, false);
                 if (geoFieldElements.empty()) { continue; }
 
                 bool match = false;
@@ -131,7 +142,6 @@ namespace mongo {
             if (geoFieldsMatched == _fields.size()) {
                 // We have a winner!  And we point at it.
                 --_numToReturn;
-                ++_nscanned;
                 return true;
             }
         }
@@ -158,7 +168,9 @@ namespace mongo {
     }
 
     void S2Cursor::explainDetails(BSONObjBuilder& b) {
-        // TODO(hk): Dump more meaningful stats.
-        b << "nscanned " << _nscanned;
+        b << "nscanned" << _nscanned;
+        b << "matchTested" << _matchTested;
+        b << "geoTested" << _geoTested;
+        b << "cellsInCover" << _cellsInCover;
     }
 }  // namespace mongo

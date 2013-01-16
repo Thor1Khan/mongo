@@ -2,16 +2,16 @@ t = db.geo_s2index
 t.drop()
 
 pointA = { "type" : "Point", "coordinates": [ 40, 5 ] }
-t.insert( {geo : pointA , nonGeo: ["pointA"]})
+t.insert( {geo : pointA , nonGeo: "pointA"})
 
 pointD = { "type" : "Point", "coordinates": [ 41.001, 6.001 ] }
-t.insert( {geo : pointD , nonGeo: ["pointD"]})
+t.insert( {geo : pointD , nonGeo: "pointD"})
 
 someline = { "type" : "LineString", "coordinates": [ [ 40, 5], [41, 6]]}
-t.insert( {geo : someline , nonGeo: ["someline"]})
+t.insert( {geo : someline , nonGeo: "someline"})
 
 pointB = { "type" : "Point", "coordinates": [ 41, 6 ] }
-t.insert( {geo : pointB , nonGeo: ["pointB"]})
+t.insert( {geo : pointB , nonGeo: "pointB"})
 
 pointC = { "type" : "Point", "coordinates": [ 41, 6 ] }
 t.insert( {geo : pointC} )
@@ -23,7 +23,7 @@ t.insert( {geo : pointE} )
 
 somepoly = { "type" : "Polygon",
              "coordinates" : [ [ [40,5], [40,6], [41,6], [41,5], [40,5]]]}
-t.insert( {geo : somepoly, nonGeo: ["somepoly"] })
+t.insert( {geo : somepoly, nonGeo: "somepoly" })
 t.ensureIndex( { geo : "2dsphere", nonGeo: 1 } )
 
 res = t.find({ "geo" : { "$geoIntersects" : { "$geometry" : pointA} } });
@@ -72,3 +72,25 @@ t.insert({loc: {type:'Point', coordinates: [40, 5], crs:{ type: 'name', properti
 assert(!db.getLastError());
 t.insert({loc: {type:'Point', coordinates: [40, 5], crs:{ type: 'name', properties:{name:'urn:ogc:def:crs:OGC:1.3:CRS84'}}}})
 assert(!db.getLastError());
+
+// We can pass level parameters and we verify that they're valid.
+// 0 <= coarsestIndexedLevel <= finestIndexedLevel <= 30.
+t.drop();
+t.save({loc: [0,0]})
+t.ensureIndex({loc: "2dsphere"}, {finestIndexedLevel: 17, coarsestIndexedLevel: 5})
+assert(!db.getLastError());
+
+t.drop();
+t.save({loc: [0,0]})
+t.ensureIndex({loc: "2dsphere"}, {finestIndexedLevel: 31, coarsestIndexedLevel: 5})
+assert(db.getLastError());
+
+t.drop();
+t.save({loc: [0,0]})
+t.ensureIndex({loc: "2dsphere"}, {finestIndexedLevel: 30, coarsestIndexedLevel: 0})
+assert(!db.getLastError());
+
+t.drop();
+t.save({loc: [0,0]})
+t.ensureIndex({loc: "2dsphere"}, {finestIndexedLevel: 30, coarsestIndexedLevel: -1})
+assert(db.getLastError());

@@ -26,7 +26,9 @@
 #pragma once
 
 #if defined(MONGO_HAVE_HEADER_UNISTD_H)
+#ifndef _MSC_VER
 #include <unistd.h>
+#endif
 #endif
 
 #if defined(_WIN32)

@@ -21,9 +21,8 @@
 #include <vector>
 
 #include "mongo/scripting/engine.h"
-
-#include "mongo/base/disallow_copying.h"
 #include "mongo/scripting/v8_deadline_monitor.h"
+#include "mongo/scripting/v8_profiler.h"
 
 /**
  * V8_SIMPLE_HEADER must be placed in any function called from a public API
@@ -181,7 +180,7 @@ namespace mongo {
                                v8::Handle<v8::Object> obj);
         void v8ToMongoRegex(BSONObjBuilder& b,
                             const string& elementName,
-                            string& regex);
+                            v8::Handle<v8::Object> v8Regex);
         void v8ToMongoDBRef(BSONObjBuilder& b,
                             const string& elementName,
                             v8::Handle<v8::Object> obj);
@@ -205,16 +204,10 @@ namespace mongo {
         v8::Persistent<v8::Object> wrapArrayObject(v8::Local<v8::Object> obj, char* data);
 
         /**
-         * Get a V8 string from the scope's cache, creating one if needed (NOTE: this may be
-         * dangerous due to use in multiple threads without changing the v8Locker)
-         */
-        v8::Handle<v8::String> getV8Str(string str);
-
-        /**
          * Create a V8 string with a local handle
          */
-        inline v8::Handle<v8::String> getLocalV8Str(string str) {
-            return v8::String::New(str.c_str());
+        static inline v8::Handle<v8::String> v8StringData(StringData str) {
+            return v8::String::New(str.rawData());
         }
 
         /**
@@ -227,34 +220,6 @@ namespace mongo {
          * Get the JS context this scope executes within.
          */
         v8::Persistent<v8::Context> getContext() { return _context; }
-
-        /**
-         * Static v8 strings for various identifiers
-         */
-        v8::Handle<v8::String> V8STR_CONN;
-        v8::Handle<v8::String> V8STR_ID;
-        v8::Handle<v8::String> V8STR_LENGTH;
-        v8::Handle<v8::String> V8STR_LEN;
-        v8::Handle<v8::String> V8STR_TYPE;
-        v8::Handle<v8::String> V8STR_ISOBJECTID;
-        v8::Handle<v8::String> V8STR_NATIVE_FUNC;
-        v8::Handle<v8::String> V8STR_NATIVE_DATA;
-        v8::Handle<v8::String> V8STR_V8_FUNC;
-        v8::Handle<v8::String> V8STR_RETURN;
-        v8::Handle<v8::String> V8STR_ARGS;
-        v8::Handle<v8::String> V8STR_T;
-        v8::Handle<v8::String> V8STR_I;
-        v8::Handle<v8::String> V8STR_EMPTY;
-        v8::Handle<v8::String> V8STR_MINKEY;
-        v8::Handle<v8::String> V8STR_MAXKEY;
-        v8::Handle<v8::String> V8STR_NUMBERLONG;
-        v8::Handle<v8::String> V8STR_NUMBERINT;
-        v8::Handle<v8::String> V8STR_DBPTR;
-        v8::Handle<v8::String> V8STR_BINDATA;
-        v8::Handle<v8::String> V8STR_WRAPPER;
-        v8::Handle<v8::String> V8STR_RO;
-        v8::Handle<v8::String> V8STR_FULLNAME;
-        v8::Handle<v8::String> V8STR_BSON;
 
     private:
 
@@ -277,6 +242,10 @@ namespace mongo {
         static v8::Handle<v8::Value> Print(V8Scope* scope, const v8::Arguments& args);
         static v8::Handle<v8::Value> Version(V8Scope* scope, const v8::Arguments& args);
         static v8::Handle<v8::Value> GCV8(V8Scope* scope, const v8::Arguments& args);
+
+        static v8::Handle<v8::Value> startCpuProfiler(V8Scope* scope, const v8::Arguments& args);
+        static v8::Handle<v8::Value> stopCpuProfiler(V8Scope* scope, const v8::Arguments& args);
+        static v8::Handle<v8::Value> getCpuProfile(V8Scope* scope, const v8::Arguments& args);
 
         /** Signal that this scope has entered a native (C++) execution context.
          *  @return  false if execution has been interrupted
@@ -315,8 +284,6 @@ namespace mongo {
         enum ConnectState { NOT, LOCAL, EXTERNAL };
         ConnectState _connectState;
 
-        std::map <string, v8::Persistent<v8::String> > _strCache;
-
         v8::Persistent<v8::FunctionTemplate> lzFunctionTemplate;
         v8::Persistent<v8::ObjectTemplate> lzObjectTemplate;
         v8::Persistent<v8::ObjectTemplate> roObjectTemplate;
@@ -324,6 +291,7 @@ namespace mongo {
         v8::Persistent<v8::ObjectTemplate> internalFieldObjects;
 
         v8::Isolate* _isolate;
+        V8CpuProfiler _cpuProfiler;
 
         mongo::mutex _interruptLock; // protects interruption-related flags
         bool _inNativeExecution;     // protected by _interruptLock

@@ -28,7 +28,9 @@
 #include "mongo/util/text.h"
 
 using namespace std;
-
+#ifdef _MSC_VER
+#undef MONGO_HAVE_EXECINFO_BACKTRACE
+#endif
 #ifdef MONGO_HAVE_EXECINFO_BACKTRACE
 
 #include <execinfo.h>
