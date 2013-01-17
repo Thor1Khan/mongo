@@ -32,9 +32,12 @@ namespace mongo {
         // FieldRangeSet so that we only examine the keys that the provided region may intersect.
         static BSONObj coverAsBSON(const vector<S2CellId> &cover, const string& field,
                                    const int coarsestIndexedLevel);
+        static void setCoverLimitsBasedOnArea(double area, S2RegionCoverer *coverer, int coarsestIndexedLevel);
     };
 
     struct S2IndexingParams {
+        const static double kRadiusOfEarthInMeters;
+
         // Since we take the cartesian product when we generate keys for an insert,
         // we need a cap.
         size_t maxKeysPerInsert;
