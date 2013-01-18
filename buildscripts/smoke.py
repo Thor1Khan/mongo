@@ -217,7 +217,8 @@ class mongod(object):
         if self.kwargs.get('use_ssl'):
             argv += ['--sslOnNormalPorts',
                      '--sslPEMKeyFile', 'jstests/libs/server.pem',
-                     '--sslCAFile', 'jstests/libs/ca.pem']
+                     '--sslCAFile', 'jstests/libs/ca.pem',
+                     '--sslWeakCertificateValidation']
         
         print "running " + " ".join(argv)
         self.proc = self._start(buildlogger(argv, is_global=True))
@@ -356,7 +357,7 @@ def skipTest(path):
     parentPath = os.path.dirname(path)
     parentDir = os.path.basename(parentPath)
     if small_oplog: # For tests running in parallel
-        if basename in ["cursor8.js", "indexh.js", "dropdb.js"]:
+        if basename in ["cursor8.js", "indexh.js", "dropdb.js", "connections_opened.js"]:
             return True
     if auth or keyFile: # For tests running with auth
         # Skip any tests that run with auth explicitly
