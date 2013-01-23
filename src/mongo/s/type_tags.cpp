@@ -99,28 +99,28 @@ namespace mongo {
         return builder.obj();
     }
 
-    bool TagsType::parseBSON(BSONObj source, string* errMsg) {
+    bool TagsType::parseBSON(const BSONObj& source, string* errMsg) {
         clear();
 
         std::string dummy;
         if (!errMsg) errMsg = &dummy;
 
         FieldParser::FieldState fieldState;
-        fieldState = FieldParser::extract(source, ns, "", &_ns, errMsg);
+        fieldState = FieldParser::extract(source, ns, &_ns, errMsg);
         if (fieldState == FieldParser::FIELD_INVALID) return false;
-        _isNsSet = fieldState == FieldParser::FIELD_VALID;
+        _isNsSet = fieldState == FieldParser::FIELD_SET;
 
-        fieldState = FieldParser::extract(source, tag, "", &_tag, errMsg);
+        fieldState = FieldParser::extract(source, tag, &_tag, errMsg);
         if (fieldState == FieldParser::FIELD_INVALID) return false;
-        _isTagSet = fieldState == FieldParser::FIELD_VALID;
+        _isTagSet = fieldState == FieldParser::FIELD_SET;
 
-        fieldState = FieldParser::extract(source, min, BSONObj(), &_min, errMsg);
+        fieldState = FieldParser::extract(source, min, &_min, errMsg);
         if (fieldState == FieldParser::FIELD_INVALID) return false;
-        _isMinSet = fieldState == FieldParser::FIELD_VALID;
+        _isMinSet = fieldState == FieldParser::FIELD_SET;
 
-        fieldState = FieldParser::extract(source, max, BSONObj(), &_max, errMsg);
+        fieldState = FieldParser::extract(source, max, &_max, errMsg);
         if (fieldState == FieldParser::FIELD_INVALID) return false;
-        _isMaxSet = fieldState == FieldParser::FIELD_VALID;
+        _isMaxSet = fieldState == FieldParser::FIELD_SET;
 
         return true;
     }

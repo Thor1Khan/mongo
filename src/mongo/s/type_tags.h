@@ -84,7 +84,7 @@ namespace mongo {
          * Clears and populates the internal state using the 'source' BSON object if the
          * latter contains valid values. Otherwise sets errMsg and returns false.
          */
-        bool parseBSON(BSONObj source, std::string* errMsg);
+        bool parseBSON(const BSONObj& source, std::string* errMsg);
 
         /**
          * Clears the internal state.
@@ -113,7 +113,7 @@ namespace mongo {
 
         void unsetNS() { _isNsSet = false; }
 
-        bool isNSSet() { return _isNsSet; }
+        bool isNSSet() const { return _isNsSet; }
 
         // Calling get*() methods when the member is not set results in undefined behavior
         const std::string& getNS() const {
@@ -128,7 +128,7 @@ namespace mongo {
 
         void unsetTag() { _isTagSet = false; }
 
-        bool isTagSet() { return _isTagSet; }
+        bool isTagSet() const { return _isTagSet; }
 
         // Calling get*() methods when the member is not set results in undefined behavior
         const std::string& getTag() const {
@@ -143,7 +143,7 @@ namespace mongo {
 
         void unsetMin() { _isMinSet = false; }
 
-        bool isMinSet() { return _isMinSet; }
+        bool isMinSet() const { return _isMinSet; }
 
         // Calling get*() methods when the member is not set results in undefined behavior
         const BSONObj getMin() const {
@@ -158,7 +158,7 @@ namespace mongo {
 
         void unsetMax() { _isMaxSet = false; }
 
-        bool isMaxSet() { return _isMaxSet; }
+        bool isMaxSet() const { return _isMaxSet; }
 
         // Calling get*() methods when the member is not set results in undefined behavior
         const BSONObj getMax() const {

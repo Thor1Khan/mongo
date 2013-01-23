@@ -68,32 +68,32 @@ namespace mongo {
         return builder.obj();
     }
 
-    bool ShardType::parseBSON(BSONObj source, string* errMsg) {
+    bool ShardType::parseBSON(const BSONObj& source, string* errMsg) {
         clear();
 
         std::string dummy;
         if (!errMsg) errMsg = &dummy;
 
         FieldParser::FieldState fieldState;
-        fieldState = FieldParser::extract(source, name, "", &_name, errMsg);
+        fieldState = FieldParser::extract(source, name, &_name, errMsg);
         if (fieldState == FieldParser::FIELD_INVALID) return false;
-        _isNameSet = fieldState == FieldParser::FIELD_VALID;
+        _isNameSet = fieldState == FieldParser::FIELD_SET;
 
-        fieldState = FieldParser::extract(source, host, "", &_host, errMsg);
+        fieldState = FieldParser::extract(source, host, &_host, errMsg);
         if (fieldState == FieldParser::FIELD_INVALID) return false;
-        _isHostSet = fieldState == FieldParser::FIELD_VALID;
+        _isHostSet = fieldState == FieldParser::FIELD_SET;
 
-        fieldState = FieldParser::extract(source, draining, false, &_draining, errMsg);
+        fieldState = FieldParser::extract(source, draining, &_draining, errMsg);
         if (fieldState == FieldParser::FIELD_INVALID) return false;
-        _isDrainingSet = fieldState == FieldParser::FIELD_VALID;
+        _isDrainingSet = fieldState == FieldParser::FIELD_SET;
 
-        fieldState = FieldParser::extract(source, maxSize, 0, &_maxSize, errMsg);
+        fieldState = FieldParser::extract(source, maxSize, &_maxSize, errMsg);
         if (fieldState == FieldParser::FIELD_INVALID) return false;
-        _isMaxSizeSet = fieldState == FieldParser::FIELD_VALID;
+        _isMaxSizeSet = fieldState == FieldParser::FIELD_SET;
 
-        fieldState = FieldParser::extract(source, tags, BSONArray(), &_tags, errMsg);
+        fieldState = FieldParser::extract(source, tags, &_tags, errMsg);
         if (fieldState == FieldParser::FIELD_INVALID) return false;
-        _isTagsSet = fieldState == FieldParser::FIELD_VALID;
+        _isTagsSet = fieldState == FieldParser::FIELD_SET;
 
         return true;
     }

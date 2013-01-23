@@ -107,40 +107,37 @@ namespace mongo {
         return builder.obj();
     }
 
-    bool SettingsType::parseBSON(BSONObj source, string* errMsg) {
+    bool SettingsType::parseBSON(const BSONObj& source, string* errMsg) {
         clear();
 
         std::string dummy;
         if (!errMsg) errMsg = &dummy;
 
         FieldParser::FieldState fieldState;
-        fieldState = FieldParser::extract(source, key, "", &_key, errMsg);
+        fieldState = FieldParser::extract(source, key, &_key, errMsg);
         if (fieldState == FieldParser::FIELD_INVALID) return false;
-        _isKeySet = fieldState == FieldParser::FIELD_VALID;
+        _isKeySet = fieldState == FieldParser::FIELD_SET;
 
-        fieldState = FieldParser::extract(source, chunksize, 0, &_chunksize, errMsg);
+        fieldState = FieldParser::extract(source, chunksize, &_chunksize, errMsg);
         if (fieldState == FieldParser::FIELD_INVALID) return false;
-        _isChunksizeSet = fieldState == FieldParser::FIELD_VALID;
+        _isChunksizeSet = fieldState == FieldParser::FIELD_SET;
 
-        fieldState = FieldParser::extract(source, balancerStopped,
-                                          false, &_balancerStopped, errMsg);
+        fieldState = FieldParser::extract(source, balancerStopped, &_balancerStopped, errMsg);
         if (fieldState == FieldParser::FIELD_INVALID) return false;
-        _isBalancerStoppedSet = fieldState == FieldParser::FIELD_VALID;
+        _isBalancerStoppedSet = fieldState == FieldParser::FIELD_SET;
 
         fieldState = FieldParser::extract(source, balancerActiveWindow,
-                                          BSONObj(), &_balancerActiveWindow, errMsg);
+                                          &_balancerActiveWindow, errMsg);
         if (fieldState == FieldParser::FIELD_INVALID) return false;
-        _isBalancerActiveWindowSet = fieldState == FieldParser::FIELD_VALID;
+        _isBalancerActiveWindowSet = fieldState == FieldParser::FIELD_SET;
 
-        fieldState = FieldParser::extract(source, shortBalancerSleep,
-                                          false, &_shortBalancerSleep, errMsg);
+        fieldState = FieldParser::extract(source, shortBalancerSleep, &_shortBalancerSleep, errMsg);
         if (fieldState == FieldParser::FIELD_INVALID) return false;
-        _isShortBalancerSleepSet = fieldState == FieldParser::FIELD_VALID;
+        _isShortBalancerSleepSet = fieldState == FieldParser::FIELD_SET;
 
-        fieldState = FieldParser::extract(source, secondaryThrottle,
-                                          false, &_secondaryThrottle, errMsg);
+        fieldState = FieldParser::extract(source, secondaryThrottle, &_secondaryThrottle, errMsg);
         if (fieldState == FieldParser::FIELD_INVALID) return false;
-        _isSecondaryThrottleSet = fieldState == FieldParser::FIELD_VALID;
+        _isSecondaryThrottleSet = fieldState == FieldParser::FIELD_SET;
 
         return true;
     }

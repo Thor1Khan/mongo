@@ -123,36 +123,36 @@ namespace mongo {
         return builder.obj();
     }
 
-    bool ChunkType::parseBSON(BSONObj source, string* errMsg) {
+    bool ChunkType::parseBSON(const BSONObj& source, string* errMsg) {
         clear();
 
         std::string dummy;
         if (!errMsg) errMsg = &dummy;
 
         FieldParser::FieldState fieldState;
-        fieldState = FieldParser::extract(source, name, "", &_name, errMsg);
+        fieldState = FieldParser::extract(source, name, &_name, errMsg);
         if (fieldState == FieldParser::FIELD_INVALID) return false;
-        _isNameSet = fieldState == FieldParser::FIELD_VALID;
+        _isNameSet = fieldState == FieldParser::FIELD_SET;
 
-        fieldState = FieldParser::extract(source, ns, "", &_ns, errMsg);
+        fieldState = FieldParser::extract(source, ns, &_ns, errMsg);
         if (fieldState == FieldParser::FIELD_INVALID) return false;
-        _isNsSet = fieldState == FieldParser::FIELD_VALID;
+        _isNsSet = fieldState == FieldParser::FIELD_SET;
 
-        fieldState = FieldParser::extract(source, min, BSONObj(), &_min, errMsg);
+        fieldState = FieldParser::extract(source, min, &_min, errMsg);
         if (fieldState == FieldParser::FIELD_INVALID) return false;
-        _isMinSet = fieldState == FieldParser::FIELD_VALID;
+        _isMinSet = fieldState == FieldParser::FIELD_SET;
 
-        fieldState = FieldParser::extract(source, max, BSONObj(), &_max, errMsg);
+        fieldState = FieldParser::extract(source, max, &_max, errMsg);
         if (fieldState == FieldParser::FIELD_INVALID) return false;
-        _isMaxSet = fieldState == FieldParser::FIELD_VALID;
+        _isMaxSet = fieldState == FieldParser::FIELD_SET;
 
-        fieldState = FieldParser::extract(source, shard, "", &_shard, errMsg);
+        fieldState = FieldParser::extract(source, shard, &_shard, errMsg);
         if (fieldState == FieldParser::FIELD_INVALID) return false;
-        _isShardSet = fieldState == FieldParser::FIELD_VALID;
+        _isShardSet = fieldState == FieldParser::FIELD_SET;
 
-        fieldState = FieldParser::extract(source, jumbo, false, &_jumbo, errMsg);
+        fieldState = FieldParser::extract(source, jumbo, &_jumbo, errMsg);
         if (fieldState == FieldParser::FIELD_INVALID) return false;
-        _isJumboSet = fieldState == FieldParser::FIELD_VALID;
+        _isJumboSet = fieldState == FieldParser::FIELD_SET;
 
         //
         // ChunkVersion backward compatibility logic contained in ChunkVersion

@@ -86,7 +86,7 @@ namespace mongo {
          * Clears and populates the internal state using the 'source' BSON object if the
          * latter contains valid values. Otherwise sets errMsg and returns false.
          */
-        bool parseBSON(BSONObj source, std::string* errMsg);
+        bool parseBSON(const BSONObj& source, std::string* errMsg);
 
         /**
          * Clears the internal state.
@@ -115,7 +115,7 @@ namespace mongo {
 
         void unsetName() { _isNameSet = false; }
 
-        bool isNameSet() { return _isNameSet; }
+        bool isNameSet() const { return _isNameSet; }
 
         // Calling get*() methods when the member is not set results in undefined behavior
         const std::string& getName() const {
@@ -130,7 +130,7 @@ namespace mongo {
 
         void unsetPrimary() { _isPrimarySet = false; }
 
-        bool isPrimarySet() { return _isPrimarySet; }
+        bool isPrimarySet() const { return _isPrimarySet; }
 
         // Calling get*() methods when the member is not set results in undefined behavior
         const std::string& getPrimary() const {
@@ -146,7 +146,7 @@ namespace mongo {
 
         void unsetDraining() { _isDrainingSet = false; }
 
-        bool isDrainingSet() {
+        bool isDrainingSet() const {
             return _isDrainingSet || draining.hasDefault();
         }
 

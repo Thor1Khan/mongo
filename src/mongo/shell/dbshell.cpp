@@ -158,11 +158,6 @@ void quitNicely( int sig ) {
         return;
     }
 
-#if !defined(_WIN32)
-    if ( sig == SIGPIPE )
-        mongo::rawOut( "mongo got signal SIGPIPE\n" );
-#endif
-
     killOps();
     shellHistoryDone();
     ::_exit(0);
@@ -231,6 +226,8 @@ void myterminate() {
     ::_exit( 14 );
 }
 
+static void ignoreSignal(int ignored) {}
+
 void setupSignals() {
     signal( SIGINT , quitNicely );
     signal( SIGTERM , quitNicely );
@@ -239,7 +236,12 @@ void setupSignals() {
     signal( SIGFPE , quitAbruptly );
 
 #if !defined(_WIN32) // surprisingly these are the only ones that don't work on windows
-    signal( SIGPIPE , quitNicely ); // Maybe just log and continue?
+    struct sigaction sigactionSignals;
+    sigactionSignals.sa_handler = ignoreSignal;
+    sigemptyset(&sigactionSignals.sa_mask);
+    sigactionSignals.sa_flags = 0;
+    sigaction(SIGPIPE, &sigactionSignals, NULL); // errors are handled in socket code directly
+
     signal( SIGBUS , quitAbruptly );
 #endif
 

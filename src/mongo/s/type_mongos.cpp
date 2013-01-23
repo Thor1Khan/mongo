@@ -86,36 +86,36 @@ namespace mongo {
         return builder.obj();
     }
 
-    bool MongosType::parseBSON(BSONObj source, string* errMsg) {
+    bool MongosType::parseBSON(const BSONObj& source, string* errMsg) {
         clear();
 
         std::string dummy;
         if (!errMsg) errMsg = &dummy;
 
         FieldParser::FieldState fieldState;
-        fieldState = FieldParser::extract(source, name, "", &_name, errMsg);
+        fieldState = FieldParser::extract(source, name, &_name, errMsg);
         if (fieldState == FieldParser::FIELD_INVALID) return false;
-        _isNameSet = fieldState == FieldParser::FIELD_VALID;
+        _isNameSet = fieldState == FieldParser::FIELD_SET;
 
-        fieldState = FieldParser::extract(source, ping, 0, &_ping, errMsg);
+        fieldState = FieldParser::extract(source, ping, &_ping, errMsg);
         if (fieldState == FieldParser::FIELD_INVALID) return false;
-        _isPingSet = fieldState == FieldParser::FIELD_VALID;
+        _isPingSet = fieldState == FieldParser::FIELD_SET;
 
-        fieldState = FieldParser::extract(source, up, 0, &_up, errMsg);
+        fieldState = FieldParser::extract(source, up, &_up, errMsg);
         if (fieldState == FieldParser::FIELD_INVALID) return false;
-        _isUpSet = fieldState == FieldParser::FIELD_VALID;
+        _isUpSet = fieldState == FieldParser::FIELD_SET;
 
-        fieldState = FieldParser::extract(source, waiting, false, &_waiting, errMsg);
+        fieldState = FieldParser::extract(source, waiting, &_waiting, errMsg);
         if (fieldState == FieldParser::FIELD_INVALID) return false;
-        _isWaitingSet = fieldState == FieldParser::FIELD_VALID;
+        _isWaitingSet = fieldState == FieldParser::FIELD_SET;
 
-        fieldState = FieldParser::extract(source, mongoVersion, "", &_mongoVersion, errMsg);
+        fieldState = FieldParser::extract(source, mongoVersion, &_mongoVersion, errMsg);
         if (fieldState == FieldParser::FIELD_INVALID) return false;
-        _isMongoVersionSet = fieldState == FieldParser::FIELD_VALID;
+        _isMongoVersionSet = fieldState == FieldParser::FIELD_SET;
 
-        fieldState = FieldParser::extract(source, configVersion, 0, &_configVersion, errMsg);
+        fieldState = FieldParser::extract(source, configVersion, &_configVersion, errMsg);
         if (fieldState == FieldParser::FIELD_INVALID) return false;
-        _isConfigVersionSet = fieldState == FieldParser::FIELD_VALID;
+        _isConfigVersionSet = fieldState == FieldParser::FIELD_SET;
 
         return true;
     }

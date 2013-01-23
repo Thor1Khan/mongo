@@ -62,20 +62,20 @@ namespace mongo {
         return builder.obj();
     }
 
-    bool LockpingsType::parseBSON(BSONObj source, string* errMsg) {
+    bool LockpingsType::parseBSON(const BSONObj& source, string* errMsg) {
         clear();
 
         std::string dummy;
         if (!errMsg) errMsg = &dummy;
 
         FieldParser::FieldState fieldState;
-        fieldState = FieldParser::extract(source, process, "", &_process, errMsg);
+        fieldState = FieldParser::extract(source, process, &_process, errMsg);
         if (fieldState == FieldParser::FIELD_INVALID) return false;
-        _isProcessSet = fieldState == FieldParser::FIELD_VALID;
+        _isProcessSet = fieldState == FieldParser::FIELD_SET;
 
-        fieldState = FieldParser::extract(source, ping, 0, &_ping, errMsg);
+        fieldState = FieldParser::extract(source, ping, &_ping, errMsg);
         if (fieldState == FieldParser::FIELD_INVALID) return false;
-        _isPingSet = fieldState == FieldParser::FIELD_VALID;
+        _isPingSet = fieldState == FieldParser::FIELD_SET;
 
         return true;
     }
