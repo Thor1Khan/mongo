@@ -70,7 +70,7 @@ namespace mongo {
             // And we've already looked at points with the cell id 211111 from the regex search
             // created above, so we only want things where the value of the last digit is not
             // stored (and therefore could be 1).
-            set<S2CellId> parents;
+            unordered_set<S2CellId> parents;
             for (size_t i = 0; i < cover.size(); ++i) {
                 for (S2CellId id = cover[i].parent(); id.level() >= coarsestIndexedLevel;
                         id = id.parent()) {
@@ -78,7 +78,7 @@ namespace mongo {
                 }
             }
 
-            for (set<S2CellId>::const_iterator it = parents.begin(); it != parents.end(); ++it) {
+            for (unordered_set<S2CellId>::const_iterator it = parents.begin(); it != parents.end(); ++it) {
                 inArrayBuilder.append(myitoa(arrayPos++), it->toString());
             }
         }

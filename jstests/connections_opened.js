@@ -4,7 +4,7 @@ var testDB = 'connectionsOpenedTest';
 var signalCollection = 'keepRunning';
 
 function createPersistentConnection() {
-    new Mongo(db.getMongo().host);
+    return new Mongo(db.getMongo().host);
 }
 
 function createTemporaryConnection() {
@@ -37,12 +37,12 @@ assert.gt(originalConnInfo.current, 0);
 assert.gt(originalConnInfo.totalCreated, 0);
 
 jsTestLog("Creating persistent connections");
+var permConns = [];
 for (var i = 0; i < 100; i++) {
-    createPersistentConnection();
+    permConns.push(createPersistentConnection());
 }
 
 jsTestLog("Testing that persistent connections increased the current and totalCreated counters");
-var currentConnInfo = db.serverStatus().connections;
 waitForConnections(originalConnInfo.current + 100, originalConnInfo.totalCreated + 100);
 
 jsTestLog("Creating temporary connections");
@@ -65,6 +65,4 @@ for (var i = 0; i < tempConns.length; i++) {
 }
 
 jsTestLog("Testing that current connections counter went down after temporary connections closed");
-currentConnInfo = db.serverStatus().connections;
-assert.eq(originalConnInfo.current + 100, currentConnInfo.current);
-assert.eq(originalConnInfo.totalCreated + 200, currentConnInfo.totalCreated);
+waitForConnections(originalConnInfo.current + 100, originalConnInfo.totalCreated + 200);
