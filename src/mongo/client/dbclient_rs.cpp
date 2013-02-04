@@ -20,6 +20,7 @@
 #include "mongo/client/dbclient_rs.h"
 
 #include <fstream>
+#include <memory>
 
 #include "mongo/base/init.h"
 #include "mongo/bson/util/builder.h"
@@ -38,19 +39,20 @@ namespace mongo {
      */
     set<string> _secOkCmdList;
 
-    MONGO_INITIALIZER(PopulateReadPrefSecOkCmdList)(::mongo::InitializerContext* context) {
-        _secOkCmdList.insert("aggregate");
-        _secOkCmdList.insert("collStats");
-        _secOkCmdList.insert("count");
-        _secOkCmdList.insert("distinct");
-        _secOkCmdList.insert("dbStats");
-        _secOkCmdList.insert("geoNear");
-        _secOkCmdList.insert("geoSearch");
-        _secOkCmdList.insert("geoWalk");
-        _secOkCmdList.insert("group");
-
-        return Status::OK();
-    }
+    class PopulateReadPrefSecOkCmdList {
+    public:
+        PopulateReadPrefSecOkCmdList() {
+            _secOkCmdList.insert("aggregate");
+            _secOkCmdList.insert("collStats");
+            _secOkCmdList.insert("count");
+            _secOkCmdList.insert("distinct");
+            _secOkCmdList.insert("dbStats");
+            _secOkCmdList.insert("geoNear");
+            _secOkCmdList.insert("geoSearch");
+            _secOkCmdList.insert("geoWalk");
+            _secOkCmdList.insert("group");
+        }
+    } _populateReadPrefSecOkCmdList;
 
     /**
      * @param ns the namespace of the query.
@@ -64,10 +66,6 @@ namespace mongo {
         if (queryOptionFlags & QueryOption_SlaveOk) {
             return true;
         }
-
-        // _secOkCmdList was not initialized! mongo::runGlobalInitializersOrDie
-        // probably was not called.
-        fassert(16464, !_secOkCmdList.empty());
 
         if (!hasReadPreference(queryObj)) {
             return false;
@@ -244,14 +242,19 @@ namespace mongo {
             }
 
             if (prefDoc.hasField("tags")) {
-                uassert(16384, "Cannot specify tags for primary only read preference",
-                        *pref != mongo::ReadPreference_PrimaryOnly);
+
 
                 const BSONElement& tagsElem = prefDoc["tags"];
                 uassert(16385, "tags for read preference should be an array",
                         tagsElem.type() == mongo::Array);
 
-                return new TagSet(BSONArray(tagsElem.Obj()));
+                std::auto_ptr<TagSet> tags(new TagSet(BSONArray(tagsElem.Obj())));
+                if (*pref == mongo::ReadPreference_PrimaryOnly && !tags->isExhausted()) {
+                    uassert(16384, "Only empty tags are allowed with primary read preference",
+                            tags->getCurrentTag().isEmpty());
+                }
+
+                return tags.release();
             }
         }
 
