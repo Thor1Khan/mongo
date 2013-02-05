@@ -397,7 +397,7 @@ else:
 
 boostVersion = GetOption( "boostVersion" )
 if boostVersion is None:
-    boostVersion = "-1_53"
+    boostVersion = "-1_54"
 else:
     boostVersion = "-" + boostVersion
 
