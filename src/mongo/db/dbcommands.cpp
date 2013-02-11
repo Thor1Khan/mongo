@@ -246,7 +246,7 @@ namespace mongo {
                         result.append( "wtimeout" , true );
                         errmsg = "timed out waiting for slaves";
                         result.append( "waited" , timer.millis() );
-                        result.append("replicatedTo", getHostsReplicatedTo(op));
+                        result.append("writtenTo", getHostsWrittenTo(op));
                         result.append( "err" , "timeout" );
                         return true;
                     }
@@ -257,7 +257,7 @@ namespace mongo {
                     killCurrentOp.checkForInterrupt();
                 }
 
-                result.append("replicatedTo", getHostsReplicatedTo(op));
+                result.append("writtenTo", getHostsWrittenTo(op));
                 int myMillis = timer.recordMillis();
                 result.appendNumber( "wtime" , myMillis );
             }
@@ -2071,7 +2071,7 @@ namespace mongo {
 
         // Treat the command the same as if it has slaveOk bit on if it has a read
         // preference setting. This is to allow these commands to run on a secondary.
-        if (hasReadPreference(_cmdobj)) {
+        if (Query::hasReadPreference(_cmdobj)) {
             queryOptions |= QueryOption_SlaveOk;
         }
 

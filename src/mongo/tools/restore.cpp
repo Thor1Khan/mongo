@@ -55,6 +55,8 @@ public:
     set<string> _users; // For restoring users with --drop
     auto_ptr<Matcher> _opmatcher; // For oplog replay
     Restore() : BSONTool( "restore" ) , _drop(false) {
+        // Default values set here will show up in help text, but will supercede any default value
+        // used when calling getParam below.
         add_options()
         ("drop" , "drop each collection before import" )
         ("oplogReplay", "replay oplog for point-in-time restore")
@@ -62,7 +64,7 @@ public:
         ("keepIndexVersion" , "don't upgrade indexes to newest version")
         ("noOptionsRestore" , "don't restore collection options")
         ("noIndexRestore" , "don't restore indexes")
-        ("w" , po::value<int>()->default_value(1) , "minimum number of replicas per write" )
+        ("w" , po::value<int>()->default_value(0) , "minimum number of replicas per write" )
         ;
         add_hidden_options()
         ("dir", po::value<string>()->default_value("dump"), "directory to restore from")
@@ -104,6 +106,7 @@ public:
         _keepIndexVersion = hasParam("keepIndexVersion");
         _restoreOptions = !hasParam("noOptionsRestore");
         _restoreIndexes = !hasParam("noIndexRestore");
+        // Make sure default value set here stays in sync with the one set in the constructor above.
         _w = getParam( "w" , 0 );
 
         bool doOplog = hasParam( "oplogReplay" );
@@ -165,7 +168,10 @@ public:
         drillDown(root, _db != "", _coll != "", true);
 
         // should this happen for oplog replay as well?
-        conn().getLastError(_db == "" ? "admin" : _db);
+        string err = conn().getLastError(_db == "" ? "admin" : _db);
+        if (!err.empty()) {
+            error() << err;
+        }
 
         if (doOplog) {
             log() << "\t Replaying oplog" << endl;
@@ -361,7 +367,10 @@ public:
 
             // wait for ops to propagate to "w" nodes (doesn't warn if w used without replset)
             if ( _w > 0 ) {
-                conn().getLastError(db, false, false, _w);
+                string err = conn().getLastError(db, false, false, _w);
+                if (!err.empty()) {
+                    error() << "Error while replaying oplog: " << err;
+                }
             }
         }
         else if ( endsWith( _curns.c_str() , ".system.indexes" )) {
@@ -378,7 +387,10 @@ public:
 
             // wait for insert to propagate to "w" nodes (doesn't warn if w used without replset)
             if ( _w > 0 ) {
-                conn().getLastErrorDetailed(_curdb, false, false, _w);
+                string err = conn().getLastError(_curdb, false, false, _w);
+                if (!err.empty()) {
+                    error() << err;
+                }
             }
         }
     }
