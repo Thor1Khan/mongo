@@ -173,7 +173,6 @@ namespace {
         clusterAdminRoleReadActions.addAction(ActionType::unsetSharding);
 
         clusterAdminRoleWriteActions.addAction(ActionType::addShard);
-        clusterAdminRoleWriteActions.addAction(ActionType::applyOps);
         clusterAdminRoleWriteActions.addAction(ActionType::closeAllDatabases);
         clusterAdminRoleWriteActions.addAction(ActionType::cpuProfiler);
         clusterAdminRoleWriteActions.addAction(ActionType::cursorInfo);
@@ -560,9 +559,9 @@ namespace {
      *
      * Returns non-OK status if "role" is not a defined role in "dbname".
      */
-    static Status _addPrivilegesForSystemRole(const std::string& dbname,
-                                              const std::string& role,
-                                              std::vector<Privilege>* outPrivileges) {
+    static void _addPrivilegesForSystemRole(const std::string& dbname,
+                                            const std::string& role,
+                                            std::vector<Privilege>* outPrivileges) {
         const bool isAdminDB = (dbname == ADMIN_DBNAME);
 
         if (role == SYSTEM_ROLE_READ) {
@@ -597,11 +596,9 @@ namespace {
                     Privilege(PrivilegeSet::WILDCARD_RESOURCE, clusterAdminRoleActions));
         }
         else {
-            return Status(ErrorCodes::BadValue,
-                          mongoutils::str::stream() <<"No such role, " << role <<
-                          ", in database " << dbname);
+            warning() << "No such role, \"" << role << "\", in database " << dbname <<
+                    ". No privileges will be acquired from this role" << endl;
         }
-        return Status::OK();
     }
 
     /**
@@ -629,9 +626,7 @@ namespace {
             BSONElement roleElement = *iter;
             if (roleElement.type() != String)
                 return Status(ErrorCodes::TypeMismatch, privilegesTypeMismatchMessage);
-            Status status = _addPrivilegesForSystemRole(dbname, roleElement.str(), outPrivileges);
-            if (!status.isOK())
-                return status;
+            _addPrivilegesForSystemRole(dbname, roleElement.str(), outPrivileges);
         }
         return Status::OK();
     }
@@ -766,7 +761,7 @@ namespace {
             newActions.removeAction(ActionType::update);
             newActions.removeAction(ActionType::remove);
             newActions.addAction(ActionType::userAdmin);
-        } else if (collectionName == "system.profle" && newActions.contains(ActionType::find)) {
+        } else if (collectionName == "system.profile" && newActions.contains(ActionType::find)) {
             newActions.removeAction(ActionType::find);
             newActions.addAction(ActionType::profileRead);
         }

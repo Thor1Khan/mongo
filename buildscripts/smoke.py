@@ -210,8 +210,8 @@ class mongod(object):
             argv += ['--nopreallocj']
         if self.kwargs.get('auth'):
             argv += ['--auth']
-            authMechanism = self.kwargs.get('authMechanism', 'MONGO-CR')
-            if authMechanism != 'MONGO-CR':
+            authMechanism = self.kwargs.get('authMechanism', 'MONGODB-CR')
+            if authMechanism != 'MONGODB-CR':
                 argv.append('--setParameter=authenticationMechanisms=' + authMechanism)
             self.auth = True
         if self.kwargs.get('use_ssl'):
@@ -383,7 +383,8 @@ def skipTest(path):
                            ("jstests", "bench_test1.js"),
                            ("jstests", "bench_test2.js"),
                            ("jstests", "bench_test3.js"),
-                           ("jstests", "max_message_size.js")] # SERVER-8414
+                           ("jstests", "drop2.js") # SERVER-8589
+                           ]
 
         if os.path.join(parentDir,basename) in [ os.path.join(*test) for test in authTestsToSkip ]:
             return True
@@ -895,7 +896,7 @@ def main():
     parser.add_option('--auth', dest='auth', default=False,
                       action="store_true",
                       help='Run standalone mongods in tests with authentication enabled')
-    parser.add_option('--authMechanism', dest='authMechanism', default='MONGO-CR',
+    parser.add_option('--authMechanism', dest='authMechanism', default='MONGODB-CR',
                       help='Use the given authentication mechanism, when --auth is used.')
     parser.add_option('--keyFile', dest='keyFile', default=None,
                       help='Path to keyFile to use to run replSet and sharding tests with authentication enabled')

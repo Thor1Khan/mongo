@@ -488,7 +488,7 @@ namespace mongo {
          * call this and it will leave maintenance mode once all of the callers
          * have called it again, passing in false.
          */
-        void setMaintenanceMode(const bool inc);
+        bool setMaintenanceMode(const bool inc);
     private:
         Member* head() const { return _members.head(); }
     public:
@@ -543,6 +543,7 @@ namespace mongo {
         threadpool::ThreadPool& getPrefetchPool() { return _prefetcherPool; }
         threadpool::ThreadPool& getWriterPool() { return _writerPool; }
 
+        static const int maxSyncSourceLagSecs;
 
         const ReplSetConfig::MemberCfg& myConfig() const { return _config; }
         bool tryToGoLiveAsASecondary(OpTime&); // readlocks
